@@ -614,6 +614,8 @@ Run these before treating a phase as complete:
 - [ ] `pnpm typecheck`
 - [ ] `pnpm lint`
 - [ ] `pnpm build`
+- [ ] `pnpm test:e2e`
+- [ ] Add or update detailed Playwright tests in `tests/e2e/**` for every Next.js user flow or browser-observable behavior touched by the phase.
 - [ ] Confirm unauthenticated requests cannot reach protected app/API data.
 - [ ] Confirm tenant isolation on every query, mutation, job, approval, notification, upload, and provider action touched by the phase.
 - [ ] For schema work: `pnpm db:generate`

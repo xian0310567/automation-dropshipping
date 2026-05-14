@@ -14,6 +14,12 @@ Use [order-cs-automation-todo.md](order-cs-automation-todo.md) as the durable im
 
 Use [saas-auth-tenancy-plan.md](saas-auth-tenancy-plan.md) for the Vercel SaaS signup/login, tenant isolation, and onboarding plan.
 
+## Playwright Verification Policy
+
+Every Next.js development task must include detailed Playwright E2E coverage for the affected browser-visible flow and must run `pnpm test:e2e` before completion. Backend-only tasks with no browser-observable behavior still run the existing Playwright suite unless technically blocked, and the completion notes must explain why no new E2E test was added.
+
+The Playwright web server uses test-only placeholder server environment values from `playwright.config.ts` so production preflight can run without real Coupang, Ownerclan, Blob, or database credentials. It starts `next start` on a dedicated E2E port and does not reuse an existing server, so the suite verifies the code built by the current `pnpm test:e2e` run. Do not replace those placeholders with production secrets.
+
 ## Environment Variables
 
 - `DATABASE_URL`: pooled Neon runtime URL.

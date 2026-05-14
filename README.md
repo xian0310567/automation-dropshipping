@@ -23,6 +23,7 @@ See [docs/order-cs-automation-todo.md](docs/order-cs-automation-todo.md) for the
 - Drizzle ORM
 - SaaS auth provider to be selected before production signup/login
 - Vitest
+- Playwright E2E tests for every Next.js development task
 
 ## Local Development
 
@@ -41,7 +42,10 @@ pnpm test
 pnpm typecheck
 pnpm lint
 pnpm build
+pnpm test:e2e
 ```
+
+Every Next.js development task must add or update detailed Playwright coverage in `tests/e2e/**` and run `pnpm test:e2e` before completion.
 
 ## Database
 
