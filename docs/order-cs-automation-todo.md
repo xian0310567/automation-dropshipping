@@ -2,6 +2,7 @@
 
 Last updated: 2026-05-15 KST
 Source plan: `.omx/plans/order-cs-automation-20260514T225551Z.md`
+SaaS plan: [saas-auth-tenancy-plan.md](saas-auth-tenancy-plan.md)
 
 ## Purpose
 
@@ -9,6 +10,8 @@ This document is the durable development backlog for the Coupang x Ownerclan ord
 
 The service is not responsible for Item Winner detection or product deletion. Another service will handle that. This service owns the daily operating loop after products are already listed:
 
+- let users sign up, log in, and access a protected Vercel-hosted SaaS dashboard
+- isolate each seller workspace as an organization/tenant with its own users, roles, credentials, jobs, and data
 - collect Coupang orders, shipments, cancellations, returns, and CS inquiries
 - decide what needs operator attention today
 - prepare Ownerclan fulfillment work
@@ -29,6 +32,7 @@ Follow these rules for every future task in this document:
 - Ownerclan live order automation is conditional. Verify account/API capability and duplicate/cancellation semantics before enabling live supplier order placement.
 - Store external identifiers as strings. Coupang IDs such as `shipmentBoxId`, `orderId`, `vendorItemId`, `receiptId`, `inquiryId`, `answerId`, and `sellerProductId` can exceed safe JavaScript integer behavior.
 - Keep Next/Vercel/Neon simple unless runtime, cron lag, fixed egress/IP, or provider throughput forces a worker.
+- Treat SaaS auth and tenant isolation as foundation work, not polish. No production dashboard, sync, approval, upload, notification, provider call, or audit query may depend on client-supplied `tenantId` or global seller credentials.
 
 ## Current Repo Snapshot
 
@@ -43,6 +47,9 @@ Existing primitives:
 
 Known gaps:
 
+- No SaaS signup, login, session, organization/tenant, membership, invitation, or billing model exists yet.
+- Current protected API model uses a temporary single-operator `OPERATOR_API_KEY` and env-resolved actor identity.
+- Coupang and Ownerclan credentials are currently shaped like process-wide env secrets, not encrypted tenant-scoped integration accounts.
 - Dashboard copy still has legacy/non-winner-oriented messaging.
 - README and operations docs now link to this roadmap, but the first app screen still needs the same product pivot.
 - No real Coupang endpoint clients exist yet.
@@ -56,6 +63,8 @@ Known gaps:
 
 Primary navigation should eventually be:
 
+- Public access: marketing/landing, signup, login, password/session recovery, and invitation acceptance
+- Onboarding: workspace creation, seller profile, Coupang credentials, Ownerclan readiness, notification settings
 - `오늘 처리`: overdue CS, orders needing Ownerclan order, tracking upload due, cancellation/return risk, provider/API failures
 - `주문`: new orders, fulfillment status, Ownerclan mapping, shipment state, waybill state
 - `CS`: product inquiries, Coupang contact-center inquiries, draft replies, reply SLA, manual review
@@ -90,6 +99,22 @@ Do not auto-execute these by default:
 - AI-generated freeform CS replies
 
 ## Non-Negotiable Gates
+
+### SaaS Auth And Tenant Gate
+
+Before public SaaS deployment or real seller data sync:
+
+- [ ] Choose and document the auth provider for Vercel deployment.
+- [ ] Add public signup, login, logout, session recovery, and invitation acceptance routes.
+- [ ] Protect the app shell, dashboard APIs, upload APIs, approval APIs, and provider-action APIs with server-side session checks.
+- [ ] Add `users`, `organizations` or `tenants`, `memberships`, `invitations`, and tenant-scoped `integration_accounts`.
+- [ ] Store roles as server-owned membership state: `owner`, `admin`, `operator`, `viewer`.
+- [ ] Resolve current tenant from server-side session + membership, never from a trusted client body.
+- [ ] Add tenant filters to every DB query that reads or writes orders, shipments, claims, CS, approvals, uploads, jobs, notifications, audits, and provider state.
+- [ ] Encrypt tenant-scoped Coupang and Ownerclan credentials; never keep production seller credentials as global env vars.
+- [ ] Add audit actor attribution with `tenantId`, `userId`, `membershipRole`, and auth provider subject id.
+- [ ] Add tenant-isolation tests that prove one tenant cannot read, approve, execute, upload, or receive notifications for another tenant.
+- [ ] Keep `OPERATOR_API_KEY` only as a local/dev or temporary single-user fallback and block it in public SaaS mode.
 
 ### Live Mutation Gate
 
@@ -170,6 +195,43 @@ Suggested files:
 - `docs/operations.md`
 - `src/app/page.tsx`
 - `src/server/dashboard/summary.ts`
+
+### Phase 0.5: SaaS Foundation, Auth, And Tenancy
+
+Goal: Make the Vercel deployment usable as a SaaS product with signup/login and tenant-isolated seller workspaces before connecting real provider data.
+
+Tasks:
+
+- [ ] Choose the production auth approach and write the decision in `docs/auth.md`.
+- [ ] Add public signup, login, logout, session recovery, and invitation acceptance flows.
+- [ ] Add a protected app shell that blocks unauthenticated dashboard access server-side.
+- [ ] Add tenant onboarding: create workspace, invite members, choose role, add seller profile, connect Coupang, check Ownerclan readiness.
+- [ ] Add `users`, `organizations` or `tenants`, `memberships`, `invitations`, and tenant-scoped `integration_accounts`.
+- [ ] Replace process-wide Coupang/Ownerclan credentials with encrypted tenant-scoped integration credentials.
+- [ ] Resolve actor identity from session + membership; stop relying on client body `actorId`, `tenantId`, or role.
+- [ ] Add role policy for `owner`, `admin`, `operator`, and `viewer`.
+- [ ] Add tenant scoping helpers for every server query and mutation.
+- [ ] Add tenant-isolation tests for dashboard reads, uploads, approvals, provider actions, notifications, and audit logs.
+- [ ] Keep `OPERATOR_API_KEY` available only for local/dev until the SaaS auth path is proven.
+
+Acceptance:
+
+- [ ] A new user can sign up or accept an invite and land in a protected workspace.
+- [ ] Unauthenticated users cannot load dashboard data or call protected APIs.
+- [ ] A user can access only tenants where they have membership.
+- [ ] Tenant A cannot read, approve, execute, upload, or receive notifications for Tenant B in tests.
+- [ ] Coupang and Ownerclan credentials are encrypted per tenant and never stored as production global env secrets.
+- [ ] `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` pass.
+
+Suggested files:
+
+- `docs/auth.md`
+- `src/server/auth/**`
+- `src/server/tenancy/**`
+- `src/server/db/schema.ts`
+- `src/app/(public)/**`
+- `src/app/(app)/**`
+- `src/app/api/**`
 
 ### Phase 1: Foundation, Transactions, Provider Control, PII
 
@@ -552,6 +614,8 @@ Run these before treating a phase as complete:
 - [ ] `pnpm typecheck`
 - [ ] `pnpm lint`
 - [ ] `pnpm build`
+- [ ] Confirm unauthenticated requests cannot reach protected app/API data.
+- [ ] Confirm tenant isolation on every query, mutation, job, approval, notification, upload, and provider action touched by the phase.
 - [ ] For schema work: `pnpm db:generate`
 - [ ] Inspect generated SQL manually.
 - [ ] Confirm no raw PII appears in serialized logs, API responses, notifications, dead letters, approval previews, or dashboard payloads.
@@ -590,24 +654,26 @@ Add fixtures for these provider scenarios:
 Use this order when work resumes:
 
 1. Phase 0: product pivot and docs.
-2. Phase 1: transaction-safe DB, provider-control, PII envelope.
-3. Phase 2: read-only Coupang sync.
-4. Phase 3: data model expansion.
-5. Phase 4: operational inbox dashboard.
-6. Phase 5: Ownerclan fallback and contract evidence.
-7. Phase 6: approval-gated shipment/waybill actions.
-8. Phase 7: CS assistant.
-9. Phase 8: claim/return workflow.
-10. Phase 9: notifications/SLAs.
-11. Phase 10: automation policy UI and later auto-execution.
+2. Phase 0.5: SaaS auth, protected app shell, tenant model, onboarding, and tenant-scoped credentials.
+3. Phase 1: transaction-safe DB, provider-control, PII envelope.
+4. Phase 2: read-only Coupang sync.
+5. Phase 3: data model expansion.
+6. Phase 4: operational inbox dashboard.
+7. Phase 5: Ownerclan fallback and contract evidence.
+8. Phase 6: approval-gated shipment/waybill actions.
+9. Phase 7: CS assistant.
+10. Phase 8: claim/return workflow.
+11. Phase 9: notifications/SLAs.
+12. Phase 10: automation policy UI and later auto-execution.
 
-Do not jump to live provider writes before phases 1 and 2 are verified.
+Do not jump to real provider data sync or live provider writes before SaaS auth/tenant isolation, phases 1 and 2 are verified.
 
 ## Suggested Team Lanes
 
 If using `$team`, split write ownership like this:
 
 - DB/Foundation: `src/server/db/**`, migrations, `src/server/providers/**`, `src/server/security/**`, env/docs for secrets.
+- SaaS/Auth/Tenancy: `src/server/auth/**`, `src/server/tenancy/**`, auth docs, public auth routes, app shell, membership policies.
 - Coupang Sync: `src/server/coupang/**`, `src/server/cron/**`, job handlers and fixtures.
 - CS Domain: `src/server/cs/**`, CS templates, CS fixtures, CS docs.
 - Ownerclan/Fulfillment/Shipment: `src/server/ownerclan/**`, `src/server/fulfillment/**`, `src/server/shipments/**`, Ownerclan contract docs and fixtures.
@@ -619,17 +685,33 @@ If using `$team`, split write ownership like this:
 These require user or provider evidence later:
 
 - [ ] Which Ownerclan API endpoints are actually enabled for this account?
+- [ ] Which auth provider should be used for Vercel SaaS deployment?
+- [ ] Should signup be public self-serve, invite-only beta, or owner-created accounts first?
+- [ ] What billing provider and subscription model should gate usage?
+- [ ] Which roles are needed beyond owner, admin, operator, and viewer?
 - [ ] What is the preferred CS reply tone and template set?
 - [ ] Which notifications should go to email, Slack, or only dashboard?
 - [ ] What order cutoff times matter for this seller?
 - [ ] Which actions should eventually be eligible for policy auto-execution?
 - [ ] Whether a worker/static-egress service becomes necessary after real volume is observed.
 
+## Auth Reference Notes
+
+Official references checked for the SaaS planning update:
+
+- Next.js Authentication guide: `https://nextjs.org/docs/app/guides/authentication`
+- Vercel Sign in with Vercel guide: `https://vercel.com/docs/sign-in-with-vercel/getting-started`
+- Clerk Next.js App Router auth reference: `https://clerk.com/docs/reference/nextjs/app-router/auth`
+
+Use current official docs again before implementing auth because provider APIs and Next.js route conventions can change.
+
 ## Definition Of Done For This Roadmap
 
 The roadmap is only complete when:
 
 - [ ] The dashboard is centered on order/CS operations.
+- [ ] Users can sign up, log in, and enter only authorized tenant workspaces.
+- [ ] Tenant-scoped credentials, jobs, uploads, approvals, notifications, provider calls, and audit logs cannot cross tenant boundaries.
 - [ ] Read-only Coupang sync is reliable and idempotent.
 - [ ] PII is encrypted/masked/redacted according to the envelope.
 - [ ] Ownerclan fallback works without live API.

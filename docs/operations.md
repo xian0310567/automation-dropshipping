@@ -2,7 +2,7 @@
 
 ## Deployment Shape
 
-This MVP is designed as one Next.js App Router application on Vercel with Neon/Postgres, Drizzle, Vercel Blob, and Vercel Cron.
+This MVP is designed as one Next.js App Router application on Vercel with Neon/Postgres, Drizzle, Vercel Blob, and Vercel Cron. The production direction is SaaS access: users sign up, log in, join an organization or tenant workspace, and operate only tenant-scoped Coupang and Ownerclan integrations.
 
 Use Vercel Pro before relying on sub-daily production monitoring. Hobby cron is acceptable for local MVP smoke checks, but not for operational order/cancel/return monitoring.
 
@@ -12,20 +12,37 @@ The service is being pivoted toward order, shipment, claim/return, and CS operat
 
 Use [order-cs-automation-todo.md](order-cs-automation-todo.md) as the durable implementation backlog for future development.
 
+Use [saas-auth-tenancy-plan.md](saas-auth-tenancy-plan.md) for the Vercel SaaS signup/login, tenant isolation, and onboarding plan.
+
 ## Environment Variables
 
 - `DATABASE_URL`: pooled Neon runtime URL.
 - `DATABASE_DIRECT_URL`: direct Neon URL for Drizzle migrations.
 - `CRON_SECRET`: Vercel Cron bearer secret.
-- `OPERATOR_API_KEY`: server-side key required by protected MVP dashboard APIs.
-- `OPERATOR_ACTOR_ID`, `OPERATOR_ROLE`: server-resolved actor identity for the single-operator MVP.
+- `OPERATOR_API_KEY`: temporary local/MVP key for protected dashboard APIs before SaaS auth is implemented.
+- `OPERATOR_ACTOR_ID`, `OPERATOR_ROLE`: temporary server-resolved actor identity for the single-operator MVP.
+- SaaS auth provider secrets: final names depend on provider selection and must stay server-only unless the provider explicitly documents a publishable key.
 - `COUPANG_VENDOR_ID`, `COUPANG_ACCESS_KEY`, `COUPANG_SECRET_KEY`: server-only Coupang credentials.
 - `BLOB_READ_WRITE_TOKEN`: Vercel Blob token.
 - `PII_ENCRYPTION_KEY`: future encryption key for receiver PII.
 
 Never prefix secrets with `NEXT_PUBLIC_`.
 
-Protected routes must resolve actor identity from server-side configuration or a future session/DB-backed auth layer. They must not trust `actorId` or role values supplied by the client body.
+Protected routes must resolve actor identity from server-side configuration or a session/DB-backed auth layer. They must not trust `actorId`, `tenantId`, organization id, or role values supplied by the client body.
+
+## SaaS Authentication And Tenancy
+
+Before public deployment, replace the temporary operator key model with:
+
+1. Public `/sign-up` and `/sign-in` entry points.
+2. A protected app shell that redirects unauthenticated users before any dashboard data loads.
+3. User, organization or tenant, membership, role, invitation, and audit actor records.
+4. Tenant-scoped integration accounts so Coupang and Ownerclan credentials are never global process-wide seller state.
+5. Tenant allowlists on every dashboard query, job, approval, upload, provider request, notification, and audit log.
+6. A first-run onboarding flow that creates the workspace, verifies the seller's Coupang/Ownerclan readiness, and stores credentials encrypted.
+7. A production decision record for the auth provider before implementation.
+
+Vercel Cron still uses `CRON_SECRET`, but cron jobs must derive tenant work from database schedules and never from request-supplied tenant ids.
 
 ## Cron Authentication
 

@@ -1,9 +1,11 @@
 # Coupang Ownerclan Operations Automation
 
-Next.js full-stack MVP for a personal Coupang x Ownerclan dropshipping operations dashboard.
+Next.js full-stack MVP for a Vercel-deployed Coupang x Ownerclan dropshipping operations dashboard.
 
 The current product direction is the daily order and CS operations loop. Item Winner detection and product deletion are handled outside this service.
 
+- SaaS signup/login and protected app access
+- organization/tenant-scoped seller workspaces
 - order, cancel, return, and shipment monitoring
 - CS inquiry monitoring, classification, and reply drafting
 - Ownerclan fulfillment queueing with API or CSV/manual fallback
@@ -11,7 +13,7 @@ The current product direction is the daily order and CS operations loop. Item Wi
 - Ownerclan API readiness or CSV/XLSX fallback
 - audit logs, retry/dead-letter state, retention, and alerts
 
-See [docs/order-cs-automation-todo.md](docs/order-cs-automation-todo.md) for the detailed phased development backlog.
+See [docs/order-cs-automation-todo.md](docs/order-cs-automation-todo.md) for the detailed phased development backlog and [docs/saas-auth-tenancy-plan.md](docs/saas-auth-tenancy-plan.md) for the SaaS signup/login and tenant plan.
 
 ## Stack
 
@@ -19,6 +21,7 @@ See [docs/order-cs-automation-todo.md](docs/order-cs-automation-todo.md) for the
 - Vercel + Vercel Cron + Vercel Blob
 - Vercel-managed Neon/Postgres
 - Drizzle ORM
+- SaaS auth provider to be selected before production signup/login
 - Vitest
 
 ## Local Development
@@ -68,7 +71,13 @@ Authorization: Bearer ${CRON_SECRET}
 
 Cron handlers must authenticate before any job lookup or work.
 
-## Operator API Auth
+## SaaS Auth Direction
+
+The production target is authenticated SaaS access: public signup/login pages, a protected application shell, user accounts, organization or tenant workspaces, role-based access, and tenant-scoped Coupang/Ownerclan credentials.
+
+The current operator API key flow is a temporary local/MVP control and should be replaced before public SaaS onboarding.
+
+## Temporary Operator API Auth
 
 Protected MVP endpoints require an operator key:
 
