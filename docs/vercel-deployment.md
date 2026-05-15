@@ -8,9 +8,11 @@
 - Production Branch: `master`
 - Install Command: `pnpm install --frozen-lockfile`
 - Build Command: `pnpm build`
-- Cron: `GET /api/cron/dispatch`, schedule `0 * * * *`
+- Cron: `GET /api/cron/dispatch`, schedule `0 0 * * *`
 
 위 설정 중 빌드와 크론은 `vercel.json`에 version-controlled 설정으로 고정한다. 계정, 팀, 도메인, 환경 변수, GitHub 연결은 Vercel Dashboard 또는 Vercel CLI에서 관리한다.
+
+현재 Vercel Hobby 플랜은 cron을 하루 1회까지만 허용한다. 운영 모니터링을 시간별로 돌리려면 Vercel Pro로 전환한 뒤 schedule을 `0 * * * *`로 되돌린다.
 
 ## Git 연결 절차
 
