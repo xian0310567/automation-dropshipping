@@ -1,67 +1,92 @@
-import { CheckCircle2, KeyRound, Store, UsersRound } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { requireAuthSession } from "@/server/auth/session";
 
 export default async function OnboardingPage() {
   const session = await requireAuthSession("/app/onboarding");
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-5 py-8 lg:px-8">
-      <div className="mb-6">
-        <p className="text-sm font-medium text-teal-700">워크스페이스 설정</p>
-        <h1 className="mt-2 text-2xl font-semibold">SaaS 온보딩</h1>
-      </div>
+    <main className="onboarding-screen" data-reference="wxMIN">
+      <header className="onboarding-hero">
+        <div>
+          <p className="ops-eyebrow">{session.tenantName} · 최초 설정</p>
+          <h1>연동 준비</h1>
+          <p>실제 판매 운영 전에 워크스페이스, 쿠팡, 오너클랜, 알림, 첫 동기화를 준비합니다.</p>
+        </div>
+        <Button asChild className="ops-primary-button" size="sm">
+          <Link href="/app">설정 저장</Link>
+        </Button>
+      </header>
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <SetupItem
-          icon={<Store size={20} />}
-          status="완료"
-          title={session.tenantName}
-          detail="운영 워크스페이스가 세션 멤버십으로 보호됩니다."
-        />
-        <SetupItem
-          icon={<UsersRound size={20} />}
-          status="다음"
-          title="멤버 초대"
-          detail="owner, admin, operator, viewer 역할로 초대합니다."
-        />
-        <SetupItem
-          icon={<KeyRound size={20} />}
-          status="대기"
-          title="쿠팡 연동"
-          detail="tenant별 암호화 credential 저장소에 연결됩니다."
-        />
-        <SetupItem
-          icon={<CheckCircle2 size={20} />}
-          status="대기"
-          title="오너클랜 준비도"
-          detail="API 가능 여부와 CSV fallback 한계를 확인합니다."
-        />
+      <section className="onboarding-grid" aria-label="온보딩 설정">
+        <aside className="onboarding-steps" aria-label="설정 단계">
+          <h2>설정 단계</h2>
+          <StepItem active number="1" title="워크스페이스" detail="판매자 기본 정보 완료" />
+          <StepItem warning number="2" title="쿠팡 연동" detail="쿠팡 주문 수집 확인" />
+          <StepItem number="3" title="오너클랜" detail="연동 또는 파일 발주 준비" />
+          <StepItem number="4" title="알림 설정" detail="위험 알림 기본값" />
+        </aside>
+
+        <section className="onboarding-main">
+          <article className="onboarding-card onboarding-coupang">
+            <h2>쿠팡 연동</h2>
+            <p>판매자 ID와 연동 키는 안전하게 보관하고, 주문 수집 가능 여부만 먼저 확인합니다.</p>
+            <div className="onboarding-field-grid">
+              <label>
+                판매자 ID
+                <Input defaultValue="A00123456" />
+              </label>
+              <label>
+                연동 키
+                <Input defaultValue="••••••••••••••••" readOnly />
+              </label>
+            </div>
+            <Button type="button" className="ops-action tone-amber" size="sm" variant="outline">
+              주문 수집 확인
+            </Button>
+          </article>
+
+          <article className="onboarding-card">
+            <h2>오너클랜 준비</h2>
+            <p>연동 가능 계정인지 확인 전에는 파일 발주·송장 처리를 기본값으로 둡니다.</p>
+            <span className="outline-pill tone-amber">계약 확인 필요</span>
+          </article>
+
+          <article className="onboarding-card">
+            <h2>알림·확인 기준</h2>
+            <p>처음에는 위험 알림과 작업 확인만 켜고, 실제 판매 조치는 운영자가 확인합니다.</p>
+            <span className="outline-pill tone-teal">확인 필수</span>
+          </article>
+        </section>
       </section>
     </main>
   );
 }
 
-function SetupItem({
-  icon,
-  status,
+function StepItem({
+  number,
   title,
   detail,
+  active,
+  warning,
 }: {
-  icon: React.ReactNode;
-  status: string;
+  number: string;
   title: string;
   detail: string;
+  active?: boolean;
+  warning?: boolean;
 }) {
   return (
-    <article className="min-h-36 rounded-lg border border-zinc-200 bg-white p-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-teal-700">{icon}</div>
-        <span className="rounded-md bg-zinc-100 px-2.5 py-1 text-sm font-medium text-zinc-700">
-          {status}
-        </span>
-      </div>
-      <h2 className="mt-4 text-base font-semibold">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-zinc-500">{detail}</p>
-    </article>
+    <Button
+      type="button"
+      className={`onboarding-step ${active ? "is-active" : ""} ${warning ? "is-warning" : ""}`}
+      variant="outline"
+    >
+      <strong>
+        {number} {title}
+      </strong>
+      <span>{detail}</span>
+    </Button>
   );
 }
