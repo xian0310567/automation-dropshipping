@@ -1,0 +1,14 @@
+.omx
+.next
+out
+build
+coverage
+playwright-report
+test-results
+node_modules
+
+.env*
+!.env.example
+
+*.log
+*.tsbuildinfo
