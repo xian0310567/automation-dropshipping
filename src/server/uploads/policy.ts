@@ -9,6 +9,9 @@ const allowedWingContentTypes = [
 export function buildUploadTokenPolicy(input: {
   pathname: string;
   actorId: string;
+  tenantId?: string;
+  userId?: string;
+  authSubjectId?: string;
   now?: Date;
 }) {
   const now = input.now ?? new Date();
@@ -27,6 +30,9 @@ export function buildUploadTokenPolicy(input: {
       kind: "wing_import",
       requestedPathname: input.pathname,
       uploadedByActorId: input.actorId,
+      tenantId: input.tenantId,
+      uploadedByUserId: input.userId,
+      uploadedByAuthSubjectId: input.authSubjectId,
     }),
   };
 }

@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { authorizeOperatorRequest } from "@/server/auth/operator";
-import { canPerformAction } from "@/server/rbac/policy";
+import { authorizeProtectedRequest } from "@/server/auth/protected-request";
 import { prepareNonWinnerApprovalBatch } from "@/server/workflows/non-winners/prepare";
 
 export const runtime = "nodejs";
@@ -22,18 +21,9 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const operator = authorizeOperatorRequest(request);
-  if (!operator.ok) {
-    return Response.json({ error: operator.message }, { status: operator.status });
-  }
-
-  if (
-    !canPerformAction({
-      role: operator.actor.role,
-      action: "review_candidate",
-    })
-  ) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+  const auth = await authorizeProtectedRequest(request, "review_candidate");
+  if (!auth.ok) {
+    return Response.json({ error: auth.message }, { status: auth.status });
   }
 
   const parsed = requestSchema.safeParse(await request.json());
@@ -48,7 +38,7 @@ export async function POST(request: Request) {
   return Response.json({
     approvals: prepareNonWinnerApprovalBatch({
       ...parsed.data,
-      actorId: operator.actor.id,
+      actorId: auth.context.actor.id,
       createdAt: createdAt.toISOString(),
       expiresAt: expiresAt.toISOString(),
     }),

@@ -12,7 +12,10 @@ describe("buildCompletedUploadValues", () => {
           etag: "etag-1",
         },
         tokenPayload: JSON.stringify({
+          tenantId: "tenant-1",
           uploadedByActorId: "actor-1",
+          uploadedByUserId: "user-1",
+          uploadedByAuthSubjectId: "dev:operator@example.com",
         }),
         verifiedByteSize: 123,
         now: new Date("2026-05-14T00:00:00.000Z"),
@@ -24,6 +27,9 @@ describe("buildCompletedUploadValues", () => {
       byteSize: 123,
       checksum: "etag-1",
       status: "uploaded",
+      tenantId: "tenant-1",
+      uploadedByUserId: "user-1",
+      uploadedByAuthSubjectId: "dev:operator@example.com",
       retentionDeadline: new Date("2026-06-13T00:00:00.000Z"),
     });
   });

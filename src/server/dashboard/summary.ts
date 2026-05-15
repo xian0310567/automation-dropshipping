@@ -1,13 +1,11 @@
 export type DashboardSummaryInput = {
-  nonWinnerTotal: number;
-  stopCandidates: number;
+  openCsInquiries: number;
+  fulfillmentNeeded: number;
   needsReview: number;
-  excluded: number;
   newOrders: number;
-  autoOrderCandidates: number;
   cancelReturnWarnings: number;
-  invoiceWaiting: number;
-  invoiceFailed: number;
+  trackingWaiting: number;
+  trackingFailed: number;
   deadLetters: number;
   rateLimitedPercent: number;
 };
@@ -31,20 +29,23 @@ export function buildDashboardSummary(
 ): DashboardSummary {
   return {
     kpis: [
-      { label: "비위너 감지", value: input.nonWinnerTotal, tone: "neutral" },
-      { label: "판매중지 후보", value: input.stopCandidates, tone: "success" },
-      { label: "확인 필요", value: input.needsReview, tone: "warning" },
       { label: "신규 주문", value: input.newOrders, tone: "neutral" },
+      { label: "발주 필요", value: input.fulfillmentNeeded, tone: "success" },
+      { label: "CS 미답변", value: input.openCsInquiries, tone: "warning" },
+      { label: "확인 필요", value: input.needsReview, tone: "warning" },
       { label: "취소/반품 경고", value: input.cancelReturnWarnings, tone: "danger" },
-      { label: "송장 실패", value: input.invoiceFailed, tone: "danger" },
+      { label: "송장 실패", value: input.trackingFailed, tone: "danger" },
     ],
     primaryQueue: {
       label: "확인 필요",
       count: input.needsReview,
     },
     urgentItems: [
+      `CS 미답변 ${input.openCsInquiries}건`,
+      `발주 필요 ${input.fulfillmentNeeded}건`,
       `출고중지 요청 ${input.cancelReturnWarnings}건`,
-      `송장 업로드 실패 ${input.invoiceFailed}건`,
+      `송장 대기 ${input.trackingWaiting}건`,
+      `송장 업로드 실패 ${input.trackingFailed}건`,
       `dead letter ${input.deadLetters}건`,
     ],
     thresholdWarnings:

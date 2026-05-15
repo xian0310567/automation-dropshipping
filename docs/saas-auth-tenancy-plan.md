@@ -21,7 +21,9 @@ The temporary `OPERATOR_API_KEY` flow remains useful for local MVP development, 
 
 ## Auth Provider Decision
 
-Do not implement auth until the provider is chosen and documented. Candidate directions:
+Provider decision is now recorded in [auth.md](auth.md): Clerk is the production auth provider for Vercel, with a local development session fallback for E2E and pre-key development.
+
+Candidate directions considered:
 
 - Managed SaaS auth provider: fastest for signup/login, invitations, sessions, and future team management.
 - Auth.js/NextAuth-style self-managed auth: more control, more responsibility for account/session/invitation behavior.
@@ -87,7 +89,7 @@ Re-check current official docs before implementation.
 ## Open Decisions
 
 - [ ] Public self-serve signup, invite-only beta, or owner-created accounts first?
-- [ ] Which auth provider should be used?
+- [x] Which auth provider should be used? Clerk.
 - [ ] Which billing provider and plan limits should gate usage?
 - [ ] Whether every user gets one default tenant or must create/join a tenant explicitly.
 - [ ] Whether `viewer` can see masked PII or only aggregate status.

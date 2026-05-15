@@ -47,10 +47,10 @@ Existing primitives:
 
 Known gaps:
 
-- No SaaS signup, login, session, organization/tenant, membership, invitation, or billing model exists yet.
-- Current protected API model uses a temporary single-operator `OPERATOR_API_KEY` and env-resolved actor identity.
-- Coupang and Ownerclan credentials are currently shaped like process-wide env secrets, not encrypted tenant-scoped integration accounts.
-- Dashboard copy still has legacy/non-winner-oriented messaging.
+- SaaS signup/login route scaffold, protected app shell, development session, and tenant schema foundation exist. Production Clerk user/org upsert, billing, and encrypted credential entry are still pending.
+- Current protected API model supports server session auth plus temporary local/dev `OPERATOR_API_KEY` fallback.
+- Tenant-scoped integration account columns exist, but the full encrypted credential envelope and provider migration are still pending.
+- Dashboard copy is now oriented around order/CS operations.
 - README and operations docs now link to this roadmap, but the first app screen still needs the same product pivot.
 - No real Coupang endpoint clients exist yet.
 - No CS domain exists yet.
@@ -180,12 +180,12 @@ Tasks:
 - [x] Update `README.md` so the first target is order/CS operations, not WING non-winner import.
 - [x] Update `docs/operations.md` with the order/CS operating loop.
 - [x] Keep existing non-winner code temporarily, but mark it as legacy/out-of-scope.
-- [ ] Reword dashboard copy in `src/app/page.tsx` from item deletion to order/CS control tower.
+- [x] Reword dashboard copy from item deletion to order/CS control tower.
 - [x] Add a short "current roadmap" link to this TODO document.
 
 Acceptance:
 
-- [ ] First screen communicates `주문/CS 운영 자동화`.
+- [x] First screen communicates `주문/CS 운영 자동화`.
 - [x] README links to this TODO document.
 - [x] Existing non-winner routes are not deleted during this phase.
 
@@ -202,17 +202,28 @@ Goal: Make the Vercel deployment usable as a SaaS product with signup/login and 
 
 Tasks:
 
-- [ ] Choose the production auth approach and write the decision in `docs/auth.md`.
-- [ ] Add public signup, login, logout, session recovery, and invitation acceptance flows.
-- [ ] Add a protected app shell that blocks unauthenticated dashboard access server-side.
-- [ ] Add tenant onboarding: create workspace, invite members, choose role, add seller profile, connect Coupang, check Ownerclan readiness.
-- [ ] Add `users`, `organizations` or `tenants`, `memberships`, `invitations`, and tenant-scoped `integration_accounts`.
+- [x] Choose the production auth approach and write the decision in `docs/auth.md`.
+- [x] Add public signup, login, logout, session recovery, and invitation acceptance flows.
+- [x] Add a protected app shell that blocks unauthenticated dashboard access server-side.
+- [x] Add tenant onboarding scaffold: create workspace, invite members, choose role, add seller profile, connect Coupang, check Ownerclan readiness.
+- [x] Add `users`, `organizations` or `tenants`, `memberships`, `invitations`, and tenant-scoped `integration_accounts`.
 - [ ] Replace process-wide Coupang/Ownerclan credentials with encrypted tenant-scoped integration credentials.
-- [ ] Resolve actor identity from session + membership; stop relying on client body `actorId`, `tenantId`, or role.
-- [ ] Add role policy for `owner`, `admin`, `operator`, and `viewer`.
-- [ ] Add tenant scoping helpers for every server query and mutation.
+- [x] Resolve actor identity from session + membership; stop relying on client body `actorId`, `tenantId`, or role.
+- [x] Add role policy for `owner`, `admin`, `operator`, and `viewer`.
+- [ ] Add tenant scoping helpers to every server query and mutation. Foundation helper exists; full query rollout is still pending.
 - [ ] Add tenant-isolation tests for dashboard reads, uploads, approvals, provider actions, notifications, and audit logs.
-- [ ] Keep `OPERATOR_API_KEY` available only for local/dev until the SaaS auth path is proven.
+- [x] Keep `OPERATOR_API_KEY` available only for local/dev until the SaaS auth path is proven.
+
+Phase 0.5 foundation delivered in the first implementation slice:
+
+- Clerk selected and installed.
+- `AUTH_PROVIDER_MODE=development|clerk` added.
+- Development sessions are HTTP-only cookies and blocked in production preflight.
+- `/app` is protected server-side and `/` is public.
+- `/sign-up`, `/sign-in`, `/session-recovery`, `/invite/[token]`, and `/logout` exist.
+- `users`, `tenants`, `memberships`, `invitations`, and tenant-scoped `integration_accounts` schema exist.
+- Tenant context helpers and unit tests exist.
+- Playwright covers unauthenticated redirect, signup to onboarding, login to dashboard, logout, and mobile layout.
 
 Acceptance:
 

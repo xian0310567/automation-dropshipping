@@ -6,7 +6,10 @@ type CompletedBlob = {
 };
 
 type UploadTokenPayload = {
+  tenantId?: string;
   uploadedByActorId?: string;
+  uploadedByUserId?: string;
+  uploadedByAuthSubjectId?: string;
 };
 
 export function buildCompletedUploadValues(input: {
@@ -28,7 +31,10 @@ export function buildCompletedUploadValues(input: {
     contentType: input.blob.contentType,
     byteSize: input.verifiedByteSize,
     checksum: input.blob.etag,
+    tenantId: parsedPayload.tenantId,
     uploadedByActorId: parsedPayload.uploadedByActorId,
+    uploadedByUserId: parsedPayload.uploadedByUserId,
+    uploadedByAuthSubjectId: parsedPayload.uploadedByAuthSubjectId,
     retentionDeadline: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
   };
 }

@@ -21,7 +21,7 @@ See [docs/order-cs-automation-todo.md](docs/order-cs-automation-todo.md) for the
 - Vercel + Vercel Cron + Vercel Blob
 - Vercel-managed Neon/Postgres
 - Drizzle ORM
-- SaaS auth provider to be selected before production signup/login
+- Clerk for production SaaS auth, with a local development session fallback
 - Vitest
 - Playwright E2E tests for every Next.js development task
 
@@ -77,9 +77,9 @@ Cron handlers must authenticate before any job lookup or work.
 
 ## SaaS Auth Direction
 
-The production target is authenticated SaaS access: public signup/login pages, a protected application shell, user accounts, organization or tenant workspaces, role-based access, and tenant-scoped Coupang/Ownerclan credentials.
+The production target is authenticated SaaS access with Clerk: public signup/login pages, a protected application shell, user accounts, organization or tenant workspaces, role-based access, and tenant-scoped Coupang/Ownerclan credentials.
 
-The current operator API key flow is a temporary local/MVP control and should be replaced before public SaaS onboarding.
+See [docs/auth.md](docs/auth.md) for the decision record. The current operator API key flow is a temporary local/MVP control and should be replaced before public SaaS onboarding.
 
 ## Temporary Operator API Auth
 
@@ -93,8 +93,10 @@ The actor id and role come from server environment variables (`OPERATOR_ACTOR_ID
 
 ## Implemented MVP Surface
 
-- `/`: operator dashboard shell for approvals, failed jobs, fallback metrics, and integration readiness.
-- `/api/uploads`: operator-authenticated Vercel Blob client-upload handler. The current implementation still supports legacy WING CSV/XLSX uploads.
+- `/`: public SaaS entry point.
+- `/sign-up`, `/sign-in`, `/session-recovery`, `/invite/[token]`: public auth flows with Clerk-ready production mode and local development session support.
+- `/app`: protected order/CS operations dashboard for approvals, failed jobs, fallback metrics, and integration readiness.
+- `/api/uploads`: session/operator-authenticated Vercel Blob client-upload handler. The current implementation still supports legacy WING CSV/XLSX uploads.
 - `/api/workflows/non-winners`: legacy operator-authenticated conversion from normalized WING rows into approval-ready sales-stop candidates. This is not part of the forward order/CS automation roadmap.
 - `/api/approvals`: operator-authenticated approval creation with durable approval and audit-log rows.
 - `/api/cron/dispatch`: authenticated cron entrypoint that claims a Postgres job lease and runs the bounded dispatcher.
@@ -110,4 +112,4 @@ The actor id and role come from server environment variables (`OPERATOR_ACTOR_ID
 - Raw API payload retention: 14 days.
 - Audit logs: 1 year.
 
-See [docs/operations.md](docs/operations.md) for deployment and migration notes.
+See [docs/auth.md](docs/auth.md) for auth notes and [docs/operations.md](docs/operations.md) for deployment and migration notes.

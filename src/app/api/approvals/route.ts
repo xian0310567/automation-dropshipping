@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { authorizeOperatorRequest } from "@/server/auth/operator";
+import { authorizeProtectedRequest } from "@/server/auth/protected-request";
 import { buildApprovalHash } from "@/server/approvals/approval";
 import { createDb } from "@/server/db/client";
 import { approvals, auditLogs } from "@/server/db/schema";
-import { assertMutationEnv } from "@/server/env";
-import { canPerformAction } from "@/server/rbac/policy";
+import { assertApprovalEnv } from "@/server/env";
+import { tenantAuditActor } from "@/server/tenancy/context";
 
 export const runtime = "nodejs";
 
@@ -19,9 +19,26 @@ const createApprovalSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const operator = authorizeOperatorRequest(request);
-  if (!operator.ok) {
-    return Response.json({ error: operator.message }, { status: operator.status });
+  try {
+    assertApprovalEnv();
+  } catch (error) {
+    return Response.json(
+      {
+        error:
+          error instanceof Error ? error.message : "Approval env is not configured",
+      },
+      { status: 503 },
+    );
+  }
+
+  const db = createDb();
+  const auth = await authorizeProtectedRequest(request, "review_candidate", {
+    db,
+    requireLocalIdentity: true,
+  });
+
+  if (!auth.ok) {
+    return Response.json({ error: auth.message }, { status: auth.status });
   }
 
   const parsed = createApprovalSchema.safeParse(await request.json());
@@ -30,21 +47,13 @@ export async function POST(request: Request) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  if (
-    !canPerformAction({
-      role: operator.actor.role,
-      action: "review_candidate",
-    })
-  ) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const createdAt = new Date();
   const expiresAt = new Date(createdAt.getTime() + 24 * 60 * 60 * 1000);
+  const { actor, tenant } = auth.context;
   const approvalHash = buildApprovalHash({
     actionType: parsed.data.actionType,
     vendorId: parsed.data.vendorId,
-    actorId: operator.actor.id,
+    actorId: actor.id,
     targetIds: parsed.data.targetIds,
     payload: parsed.data.payload,
     sourceImportId: parsed.data.sourceImportId,
@@ -53,16 +62,6 @@ export async function POST(request: Request) {
     expiresAt: expiresAt.toISOString(),
     requestVersion: 1,
   });
-  try {
-    assertMutationEnv();
-  } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "Mutation env is not configured" },
-      { status: 503 },
-    );
-  }
-
-  const db = createDb();
   const approval = await db.transaction(async (tx) => {
     const [createdApproval] = await tx
       .insert(approvals)
@@ -73,7 +72,11 @@ export async function POST(request: Request) {
         targetIds: parsed.data.targetIds,
         payload: parsed.data.payload,
         approvalHash,
-        requestedByActorId: operator.actor.id,
+        tenantId: tenant?.tenantId,
+        requestedByActorId:
+          auth.context.source === "operator" ? actor.id : undefined,
+        requestedByUserId:
+          auth.context.source === "session" ? actor.id : undefined,
         reason: parsed.data.reason,
         expiresAt,
       })
@@ -87,7 +90,8 @@ export async function POST(request: Request) {
 
     await tx.insert(auditLogs).values({
       eventType: "approval.created",
-      actorId: operator.actor.id,
+      ...(tenant ? tenantAuditActor(tenant) : {}),
+      actorId: auth.context.source === "operator" ? actor.id : undefined,
       approvalId: createdApproval.id,
       previousState: "candidate",
       nextState: "pending_approval",

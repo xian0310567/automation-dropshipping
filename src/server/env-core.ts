@@ -13,6 +13,12 @@ const envSchema = z.object({
   OPERATOR_ROLE: z
     .enum(["owner", "admin", "operator", "viewer"])
     .default("owner"),
+  AUTH_PROVIDER_MODE: z.enum(["development", "clerk"]).default("development"),
+  AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION: z
+    .enum(["true", "false"])
+    .default("false"),
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().optional(),
+  CLERK_SECRET_KEY: z.string().optional(),
   APP_BASE_URL: z.string().url().optional(),
   COUPANG_VENDOR_ID: z.string().optional(),
   COUPANG_ACCESS_KEY: z.string().optional(),
@@ -48,17 +54,16 @@ export function assertMutationEnv(env = getServerEnv()): void {
   ]);
 }
 
+export function assertApprovalEnv(env = getServerEnv()): void {
+  assertRequiredEnv(env, ["DATABASE_URL", "PII_ENCRYPTION_KEY"]);
+}
+
 export function assertCronEnv(env = getServerEnv()): void {
   assertRequiredEnv(env, ["DATABASE_URL", "CRON_SECRET"]);
 }
 
 export function assertUploadEnv(env = getServerEnv()): void {
-  assertRequiredEnv(env, [
-    "DATABASE_URL",
-    "BLOB_READ_WRITE_TOKEN",
-    "OPERATOR_API_KEY",
-    "OPERATOR_ACTOR_ID",
-  ]);
+  assertRequiredEnv(env, ["DATABASE_URL", "BLOB_READ_WRITE_TOKEN"]);
 }
 
 export function assertProductionEnv(env = getServerEnv()): void {
@@ -66,14 +71,22 @@ export function assertProductionEnv(env = getServerEnv()): void {
     "DATABASE_URL",
     "DATABASE_DIRECT_URL",
     "CRON_SECRET",
-    "OPERATOR_API_KEY",
-    "OPERATOR_ACTOR_ID",
     "BLOB_READ_WRITE_TOKEN",
-    "COUPANG_VENDOR_ID",
-    "COUPANG_ACCESS_KEY",
-    "COUPANG_SECRET_KEY",
     "PII_ENCRYPTION_KEY",
   ]);
+
+  if (env.AUTH_PROVIDER_MODE !== "clerk") {
+    throw new Error("Production SaaS mode requires AUTH_PROVIDER_MODE=clerk");
+  }
+
+  assertRequiredEnv(env, [
+    "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+    "CLERK_SECRET_KEY",
+  ]);
+
+  if (env.AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION === "true") {
+    throw new Error("Development auth sessions are not allowed in production");
+  }
 
   if (env.NOTIFICATION_PROVIDER === "telegram") {
     assertRequiredEnv(env, ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"]);
@@ -89,9 +102,15 @@ export function getOperatorRole(env = getServerEnv()): ActorRole {
 }
 
 export function shouldRunProductionPreflight(
-  env: Partial<Pick<NodeJS.ProcessEnv, "NODE_ENV" | "NEXT_PHASE">> = process.env,
+  env: Partial<
+    Pick<NodeJS.ProcessEnv, "NODE_ENV" | "NEXT_PHASE" | "E2E_TEST_MODE">
+  > = process.env,
 ): boolean {
-  return env.NODE_ENV === "production" && env.NEXT_PHASE !== "phase-production-build";
+  return (
+    env.NODE_ENV === "production" &&
+    env.NEXT_PHASE !== "phase-production-build" &&
+    env.E2E_TEST_MODE !== "true"
+  );
 }
 
 function assertRequiredEnv(

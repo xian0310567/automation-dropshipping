@@ -27,7 +27,10 @@ The Playwright web server uses test-only placeholder server environment values f
 - `CRON_SECRET`: Vercel Cron bearer secret.
 - `OPERATOR_API_KEY`: temporary local/MVP key for protected dashboard APIs before SaaS auth is implemented.
 - `OPERATOR_ACTOR_ID`, `OPERATOR_ROLE`: temporary server-resolved actor identity for the single-operator MVP.
-- SaaS auth provider secrets: final names depend on provider selection and must stay server-only unless the provider explicitly documents a publishable key.
+- `AUTH_PROVIDER_MODE`: `development` for local/E2E auth shell, `clerk` for production SaaS.
+- `AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION`: only `true` for Playwright `next start` E2E. Production preflight rejects it.
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`: Clerk browser publishable key.
+- `CLERK_SECRET_KEY`: Clerk server secret key.
 - `COUPANG_VENDOR_ID`, `COUPANG_ACCESS_KEY`, `COUPANG_SECRET_KEY`: server-only Coupang credentials.
 - `BLOB_READ_WRITE_TOKEN`: Vercel Blob token.
 - `PII_ENCRYPTION_KEY`: future encryption key for receiver PII.
@@ -37,6 +40,8 @@ Never prefix secrets with `NEXT_PUBLIC_`.
 Protected routes must resolve actor identity from server-side configuration or a session/DB-backed auth layer. They must not trust `actorId`, `tenantId`, organization id, or role values supplied by the client body.
 
 ## SaaS Authentication And Tenancy
+
+Production auth provider: Clerk. See [auth.md](auth.md) for the decision record.
 
 Before public deployment, replace the temporary operator key model with:
 

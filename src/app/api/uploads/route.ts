@@ -1,6 +1,6 @@
 import { head } from "@vercel/blob";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
-import { authorizeOperatorRequest } from "@/server/auth/operator";
+import { authorizeProtectedRequest } from "@/server/auth/protected-request";
 import { createDb } from "@/server/db/client";
 import { uploads } from "@/server/db/schema";
 import { assertUploadEnv } from "@/server/env";
@@ -11,28 +11,30 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as HandleUploadBody;
-  const operator =
+  const auth =
     body.type === "blob.generate-client-token"
-      ? authorizeOperatorRequest(request)
+      ? await authorizeUploadTokenRequest(request)
       : null;
 
-  if (operator && !operator.ok) {
-    return Response.json({ error: operator.message }, { status: operator.status });
+  if (auth && !auth.ok) {
+    return Response.json({ error: auth.message }, { status: auth.status });
   }
 
   const jsonResponse = await handleUpload({
     request,
     body,
     onBeforeGenerateToken: async (pathname) => {
-      assertUploadEnv();
-
-      if (!operator?.ok) {
-        throw new Error("Operator authorization is required");
+      if (!auth?.ok) {
+        throw new Error("Authorization is required");
       }
 
       return buildUploadTokenPolicy({
         pathname,
-        actorId: operator.actor.id,
+        actorId: auth.context.actor.id,
+        tenantId: auth.context.tenant?.tenantId,
+        userId:
+          auth.context.source === "session" ? auth.context.actor.id : undefined,
+        authSubjectId: auth.context.tenant?.authSubjectId,
       });
     },
     onUploadCompleted: async ({ blob, tokenPayload }) => {
@@ -50,4 +52,22 @@ export async function POST(request: Request) {
   });
 
   return Response.json(jsonResponse);
+}
+
+async function authorizeUploadTokenRequest(request: Request) {
+  try {
+    assertUploadEnv();
+  } catch (error) {
+    return {
+      ok: false as const,
+      status: 503 as const,
+      message:
+        error instanceof Error ? error.message : "Upload env is not configured",
+    };
+  }
+
+  return authorizeProtectedRequest(request, "upload_file", {
+    db: createDb(),
+    requireLocalIdentity: true,
+  });
 }

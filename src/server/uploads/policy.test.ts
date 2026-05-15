@@ -6,6 +6,9 @@ describe("buildUploadTokenPolicy", () => {
     const policy = buildUploadTokenPolicy({
       pathname: "imports/wing.csv",
       actorId: "actor-1",
+      tenantId: "tenant-1",
+      userId: "user-1",
+      authSubjectId: "dev:operator@example.com",
       now: new Date("2026-05-14T00:00:00.000Z"),
     });
 
@@ -17,5 +20,7 @@ describe("buildUploadTokenPolicy", () => {
     expect(policy.maximumSizeInBytes).toBe(50 * 1024 * 1024);
     expect(policy.validUntil).toBe(new Date("2026-05-14T00:15:00.000Z").getTime());
     expect(policy.tokenPayload).toContain("actor-1");
+    expect(policy.tokenPayload).toContain("tenant-1");
+    expect(policy.tokenPayload).toContain("dev:operator@example.com");
   });
 });

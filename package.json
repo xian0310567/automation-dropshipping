@@ -16,6 +16,7 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.3.4",
     "@neondatabase/serverless": "^1.1.0",
     "@vercel/blob": "^2.3.3",
     "csv-parse": "^6.2.1",
