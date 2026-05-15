@@ -27,8 +27,8 @@ The Playwright web server uses test-only placeholder server environment values f
 - `CRON_SECRET`: Vercel Cron bearer secret.
 - `OPERATOR_API_KEY`: temporary local/MVP key for protected dashboard APIs before SaaS auth is implemented.
 - `OPERATOR_ACTOR_ID`, `OPERATOR_ROLE`: temporary server-resolved actor identity for the single-operator MVP.
-- `AUTH_PROVIDER_MODE`: `development` for local/E2E auth shell, `clerk` for production SaaS.
-- `AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION`: only `true` for Playwright `next start` E2E. Production preflight rejects it.
+- `AUTH_PROVIDER_MODE`: `development` for local/E2E auth shell and locked pre-public bootstrap, `clerk` for user-accessible production SaaS.
+- `AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION`: only `true` for Playwright `next start` E2E or protected non-production Vercel preview validation. Public Vercel production rejects development sessions.
 - `E2E_TEST_MODE`: only `true` for Playwright browser tests that run against placeholder service dependencies.
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`: Clerk browser publishable key.
 - `CLERK_SECRET_KEY`: Clerk server secret key.
@@ -42,7 +42,7 @@ Protected routes must resolve actor identity from server-side configuration or a
 
 ## SaaS Authentication And Tenancy
 
-Production auth provider: Clerk. See [auth.md](auth.md) for the decision record.
+Production SaaS auth provider: Clerk. See [auth.md](auth.md) for the decision record. During the pre-public deployment phase, protected Vercel Preview deployments can run with `AUTH_PROVIDER_MODE=development` and `AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION=true` so the operator can verify the deployed SaaS shell, database, uploads, and marketplace integration flows before Clerk keys exist. Public Production deployments may run in locked bootstrap mode with `AUTH_PROVIDER_MODE=development` and `AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION=false`; this keeps development sessions disabled until Clerk keys are configured.
 
 Before public deployment, replace the temporary operator key model with:
 

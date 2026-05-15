@@ -7,7 +7,7 @@ Last updated: 2026-05-15 KST
 
 Use Clerk as the production authentication provider for the Vercel SaaS deployment.
 
-The local/test path uses `AUTH_PROVIDER_MODE=development` with an HTTP-only development session cookie so the app shell, onboarding, and Playwright tests can run before real Clerk keys are available. Public production must use `AUTH_PROVIDER_MODE=clerk`; development sessions are blocked unless explicitly enabled for E2E.
+The local/test path uses `AUTH_PROVIDER_MODE=development` with an HTTP-only development session cookie so the app shell, onboarding, and Playwright tests can run before real Clerk keys are available. Public Vercel production must not enable development sessions; user-accessible production auth uses `AUTH_PROVIDER_MODE=clerk`.
 
 ## Why Clerk
 
@@ -40,13 +40,15 @@ Before a tenant-scoped API writes `users`, `tenants`, `memberships`, `approvals`
 
 ## Production Contract
 
-Production deployment must set:
+User-accessible production deployment must set:
 
 - `AUTH_PROVIDER_MODE=clerk`
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `CLERK_SECRET_KEY`
 
-`AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION=true` is rejected by production preflight.
+Pre-public bootstrap production may temporarily use `AUTH_PROVIDER_MODE=development` only with `AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION=false`. That state keeps the public login and signup forms closed while infrastructure, database, Blob storage, cron, and routing are verified.
+
+`AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION=true` is rejected for public Vercel production. It may only be used for local/E2E runs or protected non-production Vercel preview validation before Clerk keys exist.
 
 The app stores local `users`, `tenants`, `memberships`, and `invitations` so provider identity is not treated as the only source of product authorization. Clerk proves identity; local membership state owns app roles and tenant access.
 

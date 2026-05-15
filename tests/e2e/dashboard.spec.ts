@@ -1,3 +1,5 @@
+import { spawn, type ChildProcess } from "node:child_process";
+import { setTimeout as delay } from "node:timers/promises";
 import { expect, test, type Page } from "@playwright/test";
 
 async function signIn(
@@ -58,7 +60,127 @@ async function expectStableLnb(page: Page, activeLabel: string) {
   await expect(page.locator(".ops-sidebar")).toHaveCount(0);
 }
 
+async function startLockedBootstrapServer(port: number) {
+  const output: string[] = [];
+  const server = spawn("pnpm", ["exec", "next", "start", "-p", String(port)], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION: "false",
+      AUTH_PROVIDER_MODE: "development",
+      BLOB_READ_WRITE_TOKEN: "playwright-blob-token",
+      CRON_SECRET: "playwright-cron-secret",
+      DATABASE_DIRECT_URL: "postgres://playwright-direct",
+      DATABASE_URL: "postgres://playwright-runtime",
+      E2E_TEST_MODE: "false",
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "",
+      CLERK_SECRET_KEY: "",
+      OPERATOR_ACTOR_ID: "playwright-operator",
+      OPERATOR_API_KEY: "playwright-operator-key",
+      PII_ENCRYPTION_KEY: "playwright-pii-key",
+      PORT: String(port),
+      VERCEL_ENV: "production",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  server.stdout?.on("data", (chunk) => output.push(String(chunk)));
+  server.stderr?.on("data", (chunk) => output.push(String(chunk)));
+
+  const baseURL = `http://127.0.0.1:${port}`;
+
+  try {
+    await waitForServer(baseURL, server, output);
+  } catch (error) {
+    await stopServer(server);
+    throw error;
+  }
+
+  return {
+    baseURL,
+    stop: () => stopServer(server),
+  };
+}
+
+async function waitForServer(
+  baseURL: string,
+  server: ChildProcess,
+  output: string[],
+) {
+  const deadline = Date.now() + 30_000;
+
+  while (Date.now() < deadline) {
+    if (server.exitCode !== null) {
+      throw new Error(
+        `Locked bootstrap server exited early.\n${output.join("").slice(-4000)}`,
+      );
+    }
+
+    try {
+      const response = await fetch(`${baseURL}/sign-in`);
+      if (response.ok) {
+        return;
+      }
+    } catch {
+      // Wait until next start opens the port.
+    }
+
+    await delay(250);
+  }
+
+  throw new Error(
+    `Timed out waiting for locked bootstrap server.\n${output.join("").slice(-4000)}`,
+  );
+}
+
+async function stopServer(server: ChildProcess) {
+  if (server.exitCode !== null) {
+    return;
+  }
+
+  server.kill("SIGTERM");
+  await Promise.race([
+    new Promise<void>((resolve) => server.once("exit", () => resolve())),
+    delay(5_000).then(() => {
+      if (server.exitCode === null) {
+        server.kill("SIGKILL");
+      }
+    }),
+  ]);
+}
+
 test.describe("Korean consignment operations UI", () => {
+  test("keeps public production bootstrap locked when development sessions are disabled", async ({
+    browser,
+  }, testInfo) => {
+    const lockedServer = await startLockedBootstrapServer(3200 + testInfo.workerIndex);
+    const context = await browser.newContext();
+
+    try {
+      const page = await context.newPage();
+
+      await page.goto(`${lockedServer.baseURL}/sign-in`);
+      await expect(page.locator('[data-reference="YA9gq"]')).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "운영 워크스페이스에 로그인" }),
+      ).toBeVisible();
+      await expect(page.getByText("현재 인증 설정이 완료되지 않았습니다.")).toBeVisible();
+      await expect(page.getByLabel("이메일")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "대시보드로 이동" })).toHaveCount(0);
+
+      await page.goto(`${lockedServer.baseURL}/sign-up`);
+      await expect(page.locator('[data-reference="ypY4e"]')).toBeVisible();
+      await expect(page.getByText("현재 인증 설정이 완료되지 않았습니다.")).toBeVisible();
+      await expect(page.getByRole("button", { name: "온보딩 시작" })).toHaveCount(0);
+
+      await page.goto(`${lockedServer.baseURL}/app`);
+      await expect(page).toHaveURL(/\/sign-in\?next=%2Fapp$/);
+      await expect(page.getByText("현재 인증 설정이 완료되지 않았습니다.")).toBeVisible();
+    } finally {
+      await context.close();
+      await lockedServer.stop();
+    }
+  });
+
   test("redirects unauthenticated users to the designed sign-in surface", async ({
     page,
   }) => {

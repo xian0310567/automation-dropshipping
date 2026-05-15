@@ -5,6 +5,7 @@ const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
+  VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
   DATABASE_URL: z.string().optional(),
   DATABASE_DIRECT_URL: z.string().optional(),
   CRON_SECRET: z.string().optional(),
@@ -76,8 +77,24 @@ export function assertProductionEnv(env = getServerEnv()): void {
     "PII_ENCRYPTION_KEY",
   ]);
 
-  if (env.AUTH_PROVIDER_MODE !== "clerk") {
-    throw new Error("Production SaaS mode requires AUTH_PROVIDER_MODE=clerk");
+  if (env.AUTH_PROVIDER_MODE === "development") {
+    if (env.VERCEL_ENV === "production") {
+      if (env.AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION === "true") {
+        throw new Error(
+          "Development auth sessions are not allowed in public Vercel production",
+        );
+      }
+
+      return;
+    }
+
+    if (env.AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION !== "true") {
+      throw new Error(
+        "Development auth in production requires AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION=true and a non-production Vercel environment",
+      );
+    }
+
+    return;
   }
 
   assertRequiredEnv(env, [

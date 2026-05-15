@@ -28,7 +28,7 @@ describe("session core", () => {
     );
   });
 
-  it("keeps development sessions out of production unless explicitly allowed", () => {
+  it("keeps development sessions out of production unless explicitly allowed outside public Vercel production", () => {
     expect(
       isDevelopmentSessionEnabled({
         NODE_ENV: "production",
@@ -38,10 +38,19 @@ describe("session core", () => {
     expect(
       isDevelopmentSessionEnabled({
         NODE_ENV: "production",
+        VERCEL_ENV: "preview",
         AUTH_PROVIDER_MODE: "development",
         AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION: "true",
       }),
     ).toBe(true);
+    expect(
+      isDevelopmentSessionEnabled({
+        NODE_ENV: "production",
+        VERCEL_ENV: "production",
+        AUTH_PROVIDER_MODE: "development",
+        AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION: "true",
+      }),
+    ).toBe(false);
   });
 
   it("normalizes unsafe next paths before redirecting", () => {

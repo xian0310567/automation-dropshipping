@@ -21,6 +21,7 @@ export type AuthenticatedSession = {
 
 type AuthEnv = {
   NODE_ENV?: string;
+  VERCEL_ENV?: string;
   AUTH_PROVIDER_MODE?: string;
   AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION?: string;
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?: string;
@@ -50,7 +51,8 @@ export function isDevelopmentSessionEnabled(env: AuthEnv): boolean {
   return (
     resolveAuthMode(env) === "development" &&
     (env.NODE_ENV !== "production" ||
-      env.AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION === "true")
+      (env.AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION === "true" &&
+        env.VERCEL_ENV !== "production"))
   );
 }
 

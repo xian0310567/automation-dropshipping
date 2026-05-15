@@ -10,6 +10,7 @@ import {
 
 const baseEnv = {
   NODE_ENV: "production" as const,
+  VERCEL_ENV: "production" as const,
   DATABASE_URL: "postgres://runtime",
   DATABASE_DIRECT_URL: "postgres://direct",
   CRON_SECRET: "cron-secret",
@@ -49,13 +50,52 @@ describe("env validation", () => {
     ).toThrow(/CRON_SECRET/);
   });
 
-  it("requires Clerk mode for public production SaaS deployments", () => {
+  it("allows explicit development auth for non-production Vercel demo deployments", () => {
+    expect(() =>
+      assertProductionEnv({
+        ...baseEnv,
+        VERCEL_ENV: "preview",
+        AUTH_PROVIDER_MODE: "development",
+        AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION: "true",
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: undefined,
+        CLERK_SECRET_KEY: undefined,
+      }),
+    ).not.toThrow();
+  });
+
+  it("allows locked bootstrap production without Clerk keys when development sessions are disabled", () => {
     expect(() =>
       assertProductionEnv({
         ...baseEnv,
         AUTH_PROVIDER_MODE: "development",
+        AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION: "false",
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: undefined,
+        CLERK_SECRET_KEY: undefined,
       }),
-    ).toThrow(/AUTH_PROVIDER_MODE=clerk/);
+    ).not.toThrow();
+  });
+
+  it("blocks development session enablement on public Vercel production deployments", () => {
+    expect(() =>
+      assertProductionEnv({
+        ...baseEnv,
+        AUTH_PROVIDER_MODE: "development",
+        AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION: "true",
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: undefined,
+        CLERK_SECRET_KEY: undefined,
+      }),
+    ).toThrow(/not allowed in public Vercel production/);
+  });
+
+  it("requires an explicit flag before development auth can run in non-production deployments", () => {
+    expect(() =>
+      assertProductionEnv({
+        ...baseEnv,
+        VERCEL_ENV: "preview",
+        AUTH_PROVIDER_MODE: "development",
+        AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION: "false",
+      }),
+    ).toThrow(/AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION=true/);
   });
 
   it("does not require temporary operator credentials for session uploads", () => {
