@@ -1,6 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import type { ActorRole } from "@/server/rbac/policy";
+import { getServerEnv } from "@/server/env";
 import {
   buildDevelopmentSession,
   normalizeNextPath,
@@ -15,12 +17,14 @@ export async function startDevelopmentSession(formData: FormData) {
   const tenantName =
     String(formData.get("tenantName") ?? "Demo Seller").trim() || "Demo Seller";
   const next = normalizeNextPath(formData.get("next"));
+  const role = resolveDevelopmentRole(formData.get("role"));
 
   await setDevelopmentSessionCookie(
     buildDevelopmentSession({
       email,
       name,
       tenantName,
+      role,
     }),
   );
 
@@ -43,4 +47,21 @@ export async function startDevelopmentSignup(formData: FormData) {
   signupData.set("next", next);
 
   await startDevelopmentSession(signupData);
+}
+
+function resolveDevelopmentRole(value: FormDataEntryValue | null): ActorRole | undefined {
+  if (getServerEnv().E2E_TEST_MODE !== "true" || typeof value !== "string") {
+    return undefined;
+  }
+
+  if (
+    value === "owner" ||
+    value === "admin" ||
+    value === "operator" ||
+    value === "viewer"
+  ) {
+    return value;
+  }
+
+  return undefined;
 }

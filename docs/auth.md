@@ -57,11 +57,11 @@ Unknown Clerk organization roles and authenticated users without an active organ
 - The current tenant comes from server-resolved session membership.
 - Client-supplied tenant ids are selectors only after membership verification.
 - Route handlers must call tenant helpers before tenant-scoped reads or writes.
-- Coupang and Ownerclan credentials are tenant-scoped `integration_accounts` rows and will use the Phase 1 encryption envelope before live provider sync.
+- Coupang credentials are tenant-scoped `integration_accounts` rows, written from the protected app UI, and stored with the Phase 1 encryption envelope. Ownerclan credentials remain a later integration.
 
 ## Remaining Work
 
 - Add Clerk webhook reconciliation so local `users`, `tenants`, and `memberships` stay synchronized outside first tenant-scoped API writes.
 - Build production invitation creation with Clerk Organization invitations plus local `invitations`.
-- Add encrypted credential entry screens after the Phase 1 PII/encryption envelope lands.
+- Add Ownerclan and later marketplace credential entry screens using the same encrypted tenant-scoped pattern.
 - Add billing and plan enforcement once product packaging is decided.

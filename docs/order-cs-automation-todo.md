@@ -223,6 +223,7 @@ Phase 0.5 foundation delivered in the first implementation slice:
 - `/sign-up`, `/sign-in`, `/session-recovery`, `/invite/[token]`, and `/logout` exist.
 - `users`, `tenants`, `memberships`, `invitations`, and tenant-scoped `integration_accounts` schema exist.
 - Tenant context helpers and unit tests exist.
+- 쿠팡 연동 화면에서 판매자 ID, Access Key, Secret Key를 입력하고 테넌트별 encrypted credential envelope로 저장하는 1차 흐름이 존재한다.
 - Playwright covers unauthenticated redirect, signup to onboarding, login to dashboard, logout, and mobile layout.
 
 Acceptance:
@@ -231,7 +232,7 @@ Acceptance:
 - [ ] Unauthenticated users cannot load dashboard data or call protected APIs.
 - [ ] A user can access only tenants where they have membership.
 - [ ] Tenant A cannot read, approve, execute, upload, or receive notifications for Tenant B in tests.
-- [ ] Coupang and Ownerclan credentials are encrypted per tenant and never stored as production global env secrets.
+- [ ] Coupang and Ownerclan credentials are encrypted per tenant and never stored as production global env secrets. Coupang UI/storage exists; Ownerclan remains pending.
 - [ ] `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` pass.
 
 Suggested files:
@@ -386,7 +387,7 @@ Tasks:
 
 Acceptance:
 
-- [ ] Dashboard works with no provider credentials and shows actionable not-configured states.
+- [ ] Dashboard works with no provider credentials and shows actionable not-configured states. 쿠팡 연동 화면은 미연결 상태와 입력 검증을 표시한다.
 - [ ] Dashboard payloads contain no raw PII.
 - [ ] Static demo data is replaced by fixtures or DB-backed queries.
 

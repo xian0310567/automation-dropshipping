@@ -29,11 +29,12 @@ The Playwright web server uses test-only placeholder server environment values f
 - `OPERATOR_ACTOR_ID`, `OPERATOR_ROLE`: temporary server-resolved actor identity for the single-operator MVP.
 - `AUTH_PROVIDER_MODE`: `development` for local/E2E auth shell, `clerk` for production SaaS.
 - `AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION`: only `true` for Playwright `next start` E2E. Production preflight rejects it.
+- `E2E_TEST_MODE`: only `true` for Playwright browser tests that run against placeholder service dependencies.
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`: Clerk browser publishable key.
 - `CLERK_SECRET_KEY`: Clerk server secret key.
-- `COUPANG_VENDOR_ID`, `COUPANG_ACCESS_KEY`, `COUPANG_SECRET_KEY`: server-only Coupang credentials.
+- `COUPANG_VENDOR_ID`, `COUPANG_ACCESS_KEY`, `COUPANG_SECRET_KEY`: legacy single-seller Coupang credentials for older jobs. New SaaS seller credentials are stored per tenant in encrypted `integration_accounts` rows.
 - `BLOB_READ_WRITE_TOKEN`: Vercel Blob token.
-- `PII_ENCRYPTION_KEY`: future encryption key for receiver PII.
+- `PII_ENCRYPTION_KEY`: encryption key for receiver PII and tenant-scoped marketplace credential envelopes.
 
 Never prefix secrets with `NEXT_PUBLIC_`.
 

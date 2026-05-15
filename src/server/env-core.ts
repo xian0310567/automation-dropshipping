@@ -17,6 +17,7 @@ const envSchema = z.object({
   AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION: z
     .enum(["true", "false"])
     .default("false"),
+  E2E_TEST_MODE: z.enum(["true", "false"]).default("false"),
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().optional(),
   CLERK_SECRET_KEY: z.string().optional(),
   APP_BASE_URL: z.string().url().optional(),

@@ -73,6 +73,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
               <input defaultValue="Demo Seller" name="tenantName" />
             </label>
             <input name="name" type="hidden" value="운영자" />
+            <input name="role" type="hidden" value="owner" />
             <button type="submit">대시보드로 이동</button>
           </form>
         ) : (

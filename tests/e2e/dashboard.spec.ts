@@ -1,9 +1,25 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function signIn(page: Page, next = "/app") {
+async function signIn(
+  page: Page,
+  next = "/app",
+  options: {
+    email?: string;
+    role?: "owner" | "admin" | "operator" | "viewer";
+    tenantName?: string;
+  } = {},
+) {
   await page.goto(`/sign-in?next=${encodeURIComponent(next)}`);
-  await page.getByLabel("이메일").fill("operator@example.com");
-  await page.getByLabel("워크스페이스").fill("Demo Seller");
+  await page.getByLabel("이메일").fill(options.email ?? "operator@example.com");
+  await page.getByLabel("워크스페이스").fill(options.tenantName ?? "Demo Seller");
+  await page
+    .locator('input[name="role"]')
+    .evaluate(
+      (element, role) => {
+        (element as HTMLInputElement).value = role;
+      },
+      options.role ?? "owner",
+    );
   await page.getByRole("button", { name: "대시보드로 이동" }).click();
   await expect(page).toHaveURL(new RegExp(`${next.replace(/\//g, "\\/")}$`));
 }
@@ -129,7 +145,7 @@ test.describe("Korean consignment operations UI", () => {
       ["/app/cs", "u347IV", "CS 인박스", "답변 검토", "CS"],
       ["/app/cs/detail", "LFAF9", "답변 초안 승인", "답변 발송", "CS"],
       ["/app/claims", "vf3YB", "취소·반품", "승인 검토", "취소·반품"],
-      ["/app/integrations", "jnl9R", "공급사·마켓 상태", "연동 확인", "공급사·마켓"],
+      ["/app/integrations", "jnl9R", "마켓 연동", "쿠팡 연결 저장", "공급사·마켓"],
       ["/app/products", "Ro2UR", "상품·재고 모니터링", "무선 미니 가습기", "상품·재고"],
       ["/app/history", "H2Nuw", "작업 이력·알림", "이력 내보내기", "작업 이력"],
       ["/app/margins", "KiqBh", "가격·마진 모니터링", "가격 조정", "가격·마진"],
@@ -143,6 +159,83 @@ test.describe("Korean consignment operations UI", () => {
       await expectStableLnb(page, activeLabel);
       await expectNoDeveloperCopy(page);
     }
+  });
+
+  test("lets owners review the Coupang marketplace connection flow", async ({
+    page,
+  }) => {
+    await signIn(page, "/app/integrations", {
+      email: "coupang-owner@example.com",
+      tenantName: "Coupang Owner Seller",
+    });
+    const integrations = page.locator('[data-reference="jnl9R"]');
+
+    await expect(integrations).toBeVisible();
+    await expect(
+      integrations.getByRole("heading", { name: "마켓 연동" }),
+    ).toBeVisible();
+    await expect(
+      integrations.getByRole("heading", { name: "쿠팡 WING Open API" }),
+    ).toBeVisible();
+    await expect(integrations.getByText("연결 필요").first()).toBeVisible();
+    await expect(integrations.getByLabel("판매자 ID")).toBeVisible();
+    await expect(integrations.getByLabel("Access Key")).toBeVisible();
+    await expect(integrations.getByLabel("Secret Key")).toHaveValue("");
+    await expect(
+      integrations.getByRole("link", { name: "WING에서 키 확인" }),
+    ).toHaveAttribute("href", "https://wing.coupang.com");
+    await expectStableLnb(page, "공급사·마켓");
+
+    await integrations.getByRole("button", { name: "쿠팡 연결 저장" }).click();
+
+    await expect(integrations.getByRole("alert")).toContainText(
+      "입력값을 확인해주세요.",
+    );
+    await expect(integrations.getByText("쿠팡 판매자 ID를 입력해주세요.")).toBeVisible();
+    await expect(integrations.getByLabel("Secret Key")).toHaveValue("");
+
+    await integrations.getByLabel("판매자 ID").fill("A00123456");
+    await integrations.getByLabel("연동 이름").fill("본점 쿠팡");
+    await integrations.getByLabel("Access Key").fill("coupang-access-key");
+    await integrations.getByLabel("Secret Key").fill("coupang-secret-key");
+    await integrations.getByRole("button", { name: "쿠팡 연결 저장" }).click();
+
+    await expect(integrations.getByRole("status")).toContainText(
+      "쿠팡 연동 정보를 안전하게 저장했습니다.",
+    );
+    await page.reload();
+    await expect(integrations.getByText("연결됨").first()).toBeVisible();
+    await expect(integrations.getByText("A00****56")).toBeVisible();
+    await expect(integrations.getByLabel("Secret Key")).toHaveValue("");
+
+    await integrations.getByRole("button", { name: "쿠팡 연결 해제" }).click();
+    await page.reload();
+    await expect(integrations.getByText("연결 필요").first()).toBeVisible();
+    await expect(integrations.getByText("미입력")).toBeVisible();
+    await expectNoDeveloperCopy(page);
+  });
+
+  test("keeps Coupang credential controls disabled for non-managers", async ({
+    page,
+  }) => {
+    await signIn(page, "/app/integrations", {
+      email: "viewer@example.com",
+      role: "viewer",
+      tenantName: "Viewer Seller",
+    });
+    const integrations = page.locator('[data-reference="jnl9R"]');
+
+    await expect(integrations).toBeVisible();
+    await expect(
+      integrations.getByText("연동 변경은 소유자 또는 관리자만 할 수 있습니다."),
+    ).toBeVisible();
+    await expect(
+      integrations.getByRole("button", { name: "쿠팡 연결 저장" }),
+    ).toBeDisabled();
+    await expect(
+      integrations.getByRole("button", { name: "쿠팡 연결 해제" }),
+    ).toBeDisabled();
+    await expectNoDeveloperCopy(page);
   });
 
   test("logs out and blocks the next protected navigation", async ({ page }) => {

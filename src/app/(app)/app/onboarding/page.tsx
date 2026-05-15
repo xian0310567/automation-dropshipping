@@ -35,15 +35,15 @@ export default async function OnboardingPage() {
             <div className="onboarding-field-grid">
               <label>
                 판매자 ID
-                <Input defaultValue="A00123456" />
+                <Input placeholder="쿠팡 연동 화면에서 입력" readOnly />
               </label>
               <label>
-                연동 키
-                <Input defaultValue="••••••••••••••••" readOnly />
+                Access Key / Secret Key
+                <Input placeholder="저장 후 다시 표시되지 않음" readOnly />
               </label>
             </div>
-            <Button type="button" className="ops-action tone-amber" size="sm" variant="outline">
-              주문 수집 확인
+            <Button asChild className="ops-action tone-amber" size="sm" variant="outline">
+              <Link href="/app/integrations">쿠팡 연결하기</Link>
             </Button>
           </article>
 
