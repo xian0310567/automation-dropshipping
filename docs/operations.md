@@ -38,6 +38,8 @@ Never prefix secrets with `NEXT_PUBLIC_`.
 
 Protected routes must resolve actor identity from server-side configuration or a session/DB-backed auth layer. They must not trust `actorId`, `tenantId`, organization id, or role values supplied by the client body.
 
+Operator health checks may authenticate with either `Authorization: Bearer ${OPERATOR_API_KEY}` or an `x-operator-key` / `x-operator-api-key` header. Production verification must use the key stored in Vercel Production, not a stale local `.env.local` value.
+
 ## SaaS Authentication And Tenancy
 
 Production SaaS auth provider: first-party email/password auth backed by Neon. See [auth.md](auth.md) for the decision record. Protected Vercel Preview deployments can still run with `AUTH_PROVIDER_MODE=development` and `AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION=true` so the operator can verify the deployed SaaS shell, database, uploads, and marketplace integration flows without creating test accounts. Public Production should run with `AUTH_PROVIDER_MODE=password`.
@@ -53,6 +55,18 @@ Before public deployment, replace the temporary operator key model with:
 7. Account management and password recovery before external team rollout.
 
 Vercel Cron still uses `CRON_SECRET`, but cron jobs must derive tenant work from database schedules and never from request-supplied tenant ids.
+
+## Coupang Collection Jobs
+
+When a tenant saves Coupang credentials, the app schedules three recurring collection lanes:
+
+- `coupang.orders.collect`: signed OpenAPI order-sheet collection over a rolling sub-24-hour window.
+- `coupang.products.collect`: seller product status refresh for known Coupang seller product ids.
+- `coupang.cs.collect`: unanswered/transferred CS inquiry collection over a seven-day-safe window.
+
+The worker reads tenant-scoped encrypted credentials from `integration_accounts`, signs each Coupang request server-side, stores orders/products/CS alerts in tenant-scoped tables, and writes redacted request evidence to `api_request_logs`. Raw receiver PII is encrypted before storage and raw Coupang payloads are not logged.
+
+Successful order and CS runs re-queue the same tenant job for the next 10-minute window. Product status refresh re-queues hourly. Coupang requests are paced below the provider rate ceiling, and provider `429` responses delay the next attempt using `Retry-After` when present.
 
 ## Cron Authentication
 

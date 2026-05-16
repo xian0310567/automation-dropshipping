@@ -102,7 +102,7 @@ describe("dispatchCronOnce", () => {
     expect(result).toMatchObject({ status: "succeeded" });
   });
 
-  it("runs Coupang collection jobs through the registered job handler", async () => {
+  it("keeps legacy Coupang preparation jobs executable through the registered handler", async () => {
     await expect(
       runRegisteredJob({
         id: "job-coupang-orders",
@@ -125,6 +125,23 @@ describe("dispatchCronOnce", () => {
         stage: "ready_for_collection",
       },
     });
+  });
+
+  it("requires runtime dependencies before dispatching live Coupang collection jobs", async () => {
+    await expect(
+      runRegisteredJob({
+        id: "job-coupang-orders",
+        tenantId: "tenant-1",
+        type: "coupang.orders.collect",
+        checkpoint: {
+          provider: "coupang",
+          syncKind: "orders",
+          stage: "queued",
+          cursor: null,
+        },
+        leaseOwner: "cron-test",
+      }),
+    ).rejects.toThrow(/database and environment/i);
   });
 
   it("does not record finished-run evidence when the lease transition is stale", async () => {

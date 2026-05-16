@@ -6,6 +6,7 @@ import type { DbClient } from "@/server/db/client";
 import { integrationAccounts } from "@/server/db/schema";
 import {
   CREDENTIAL_KEY_VERSION,
+  decryptCredentialPayload,
   encryptCredentialPayload,
 } from "@/server/security/envelope";
 import type { ServerEnv } from "@/server/env-core";
@@ -33,6 +34,10 @@ export type CoupangIntegrationSummary = {
   storageAvailable: boolean;
 };
 
+export type StoredCoupangCredentials = CoupangCredentialInput & {
+  accountId: string;
+};
+
 const coupangCredentialSchema = z.object({
   vendorId: z
     .string()
@@ -57,6 +62,9 @@ const coupangCredentialSchema = z.object({
     .max(60, "표시 이름은 60자 이하로 입력해주세요.")
     .optional()
     .transform((value) => value || undefined),
+});
+const storedCoupangCredentialSchema = coupangCredentialSchema.omit({
+  displayName: true,
 });
 
 export function parseCoupangCredentialInput(input: {
@@ -130,6 +138,50 @@ export async function getCoupangIntegrationSummary(input: {
       action: "manage_integration_credentials",
     }),
     storageAvailable: true,
+  };
+}
+
+export async function getStoredCoupangCredentials(input: {
+  db: DbClient;
+  context: Pick<TenantContext, "tenantId">;
+  env: Pick<ServerEnv, "PII_ENCRYPTION_KEY">;
+}): Promise<StoredCoupangCredentials> {
+  const [account] = await input.db
+    .select({
+      id: integrationAccounts.id,
+      status: integrationAccounts.status,
+      credentialEncryptedPayload: integrationAccounts.credentialEncryptedPayload,
+    })
+    .from(integrationAccounts)
+    .where(
+      and(
+        eq(integrationAccounts.tenantId, input.context.tenantId),
+        eq(integrationAccounts.provider, COUPANG_PROVIDER),
+      ),
+    )
+    .limit(1);
+
+  if (!account || account.status !== "connected" || !account.credentialEncryptedPayload) {
+    throw new Error("쿠팡 연동 정보가 연결되어 있지 않습니다.");
+  }
+
+  const decrypted = decryptCredentialPayload<unknown>(
+    account.credentialEncryptedPayload,
+    {
+      tenantId: input.context.tenantId,
+      provider: COUPANG_PROVIDER,
+    },
+    input.env,
+  );
+  const parsed = storedCoupangCredentialSchema.safeParse(decrypted);
+
+  if (!parsed.success) {
+    throw new Error("쿠팡 연동 정보 형식이 올바르지 않습니다.");
+  }
+
+  return {
+    accountId: account.id,
+    ...parsed.data,
   };
 }
 

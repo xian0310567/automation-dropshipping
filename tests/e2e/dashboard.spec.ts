@@ -254,9 +254,9 @@ async function getCoupangJobsForPasswordAuthAccount(email: string) {
     join jobs on jobs.tenant_id = memberships.tenant_id
     where users.email = ${email}
       and jobs.type in (
-        'coupang.orders.collection.prepare',
-        'coupang.products.collection.prepare',
-        'coupang.cs.collection.prepare'
+        'coupang.orders.collect',
+        'coupang.products.collect',
+        'coupang.cs.collect'
       )
     order by jobs.type asc
   `) as { type: string; status: string }[];
@@ -675,27 +675,27 @@ test.describe("Korean consignment operations UI", () => {
       await expect(integrations.getByText("3개 작업이 대기 중입니다.")).toBeVisible();
 
       expect(await getCoupangJobsForPasswordAuthAccount(email)).toEqual([
-        { type: "coupang.cs.collection.prepare", status: "queued" },
-        { type: "coupang.orders.collection.prepare", status: "queued" },
-        { type: "coupang.products.collection.prepare", status: "queued" },
+        { type: "coupang.cs.collect", status: "queued" },
+        { type: "coupang.orders.collect", status: "queued" },
+        { type: "coupang.products.collect", status: "queued" },
       ]);
 
       await integrations.getByRole("button", { name: "쿠팡 연결 해제" }).click();
       await expect
         .poll(() => getCoupangJobsForPasswordAuthAccount(email))
         .toEqual([
-          { type: "coupang.cs.collection.prepare", status: "cancelled" },
-          { type: "coupang.orders.collection.prepare", status: "cancelled" },
-          { type: "coupang.products.collection.prepare", status: "cancelled" },
+          { type: "coupang.cs.collect", status: "cancelled" },
+          { type: "coupang.orders.collect", status: "cancelled" },
+          { type: "coupang.products.collect", status: "cancelled" },
         ]);
 
       await page.reload();
       await expect(integrations.getByText("쿠팡을 연결하면 시작됩니다.")).toBeVisible();
       await expect(integrations.getByText("3개 작업이 대기 중입니다.")).toHaveCount(0);
       expect(await getCoupangJobsForPasswordAuthAccount(email)).toEqual([
-        { type: "coupang.cs.collection.prepare", status: "cancelled" },
-        { type: "coupang.orders.collection.prepare", status: "cancelled" },
-        { type: "coupang.products.collection.prepare", status: "cancelled" },
+        { type: "coupang.cs.collect", status: "cancelled" },
+        { type: "coupang.orders.collect", status: "cancelled" },
+        { type: "coupang.products.collect", status: "cancelled" },
       ]);
     } finally {
       await context.close();

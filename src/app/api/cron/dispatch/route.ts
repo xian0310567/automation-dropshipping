@@ -4,9 +4,10 @@ import {
   dispatchCronOnce,
   markJobFailed,
   markJobFinished,
+  runRegisteredJob,
 } from "@/server/cron/dispatcher";
 import { createDb } from "@/server/db/client";
-import { assertCronEnv } from "@/server/env";
+import { assertCronEnv, getServerEnv } from "@/server/env";
 
 export const runtime = "nodejs";
 
@@ -30,10 +31,12 @@ export async function GET(request: Request) {
   }
 
   const db = createDb();
+  const env = getServerEnv();
   const leaseOwner = `vercel-cron:${crypto.randomUUID()}`;
   const result = await dispatchCronOnce({
     leaseOwner,
     claimJob: () => claimNextJob(db, leaseOwner),
+    runJob: (job) => runRegisteredJob(job, { db, env }),
     markJobFinished: (job, runResult) => markJobFinished(db, job, runResult),
     markJobFailed: (job, error) => markJobFailed(db, job, error),
   });

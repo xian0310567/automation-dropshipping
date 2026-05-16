@@ -24,6 +24,25 @@ describe("authorizeOperatorHeaders", () => {
     });
   });
 
+  it("accepts the operator key header for scriptable health checks", () => {
+    expect(
+      authorizeOperatorHeaders({
+        operatorKey: "operator-secret",
+        env: {
+          OPERATOR_API_KEY: "operator-secret",
+          OPERATOR_ACTOR_ID: "actor-1",
+          OPERATOR_ROLE: "operator",
+        },
+      }),
+    ).toMatchObject({
+      ok: true,
+      actor: {
+        id: "actor-1",
+        role: "operator",
+      },
+    });
+  });
+
   it("rejects missing or invalid operator credentials", () => {
     expect(
       authorizeOperatorHeaders({

@@ -68,7 +68,7 @@ async function loadCoupangIntegrationData(
         summary.status === "connected"
           ? [
               {
-                type: "coupang.orders.collection.prepare",
+                type: "coupang.orders.collect",
                 status: "queued",
                 lastError: null,
                 updatedAt: summary.credentialLastRotatedAt
@@ -76,7 +76,7 @@ async function loadCoupangIntegrationData(
                   : new Date(),
               },
               {
-                type: "coupang.products.collection.prepare",
+                type: "coupang.products.collect",
                 status: "queued",
                 lastError: null,
                 updatedAt: summary.credentialLastRotatedAt
@@ -84,7 +84,7 @@ async function loadCoupangIntegrationData(
                   : new Date(),
               },
               {
-                type: "coupang.cs.collection.prepare",
+                type: "coupang.cs.collect",
                 status: "queued",
                 lastError: null,
                 updatedAt: summary.credentialLastRotatedAt

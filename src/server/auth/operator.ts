@@ -25,7 +25,9 @@ export type OperatorAuthResult =
 export function authorizeOperatorRequest(request: Request): OperatorAuthResult {
   return authorizeOperatorHeaders({
     authorization: request.headers.get("authorization"),
-    operatorKey: request.headers.get("x-operator-key"),
+    operatorKey:
+      request.headers.get("x-operator-key") ??
+      request.headers.get("x-operator-api-key"),
     env: process.env as OperatorEnv,
   });
 }

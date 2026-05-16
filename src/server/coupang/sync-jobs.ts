@@ -1,16 +1,42 @@
 import { and, eq, inArray } from "drizzle-orm";
+import { CoupangApiError, type CoupangFetch } from "@/server/coupang/coupang-client";
+import {
+  runCoupangCollectionJob,
+  type CoupangCollectionCheckpoint,
+} from "@/server/coupang/collection-runner";
 import type { DbClient } from "@/server/db/client";
 import { jobs } from "@/server/db/schema";
+import type { ServerEnv } from "@/server/env-core";
 import type { JobCheckpoint } from "@/server/jobs/runner";
 import type { TenantContext } from "@/server/tenancy/context";
 
 export const COUPANG_SYNC_JOB_TYPES = [
+  "coupang.orders.collect",
+  "coupang.products.collect",
+  "coupang.cs.collect",
+] as const;
+export const COUPANG_COLLECTION_INTERVAL_MS_BY_TYPE: Record<
+  (typeof COUPANG_SYNC_JOB_TYPES)[number],
+  number
+> = {
+  "coupang.orders.collect": 10 * 60 * 1000,
+  "coupang.products.collect": 60 * 60 * 1000,
+  "coupang.cs.collect": 10 * 60 * 1000,
+};
+export const COUPANG_DEFAULT_FAILURE_BACKOFF_MS = 60 * 1000;
+export const COUPANG_MAX_FAILURE_BACKOFF_MS = 15 * 60 * 1000;
+export const COUPANG_LEGACY_SYNC_JOB_TYPES = [
   "coupang.orders.collection.prepare",
   "coupang.products.collection.prepare",
   "coupang.cs.collection.prepare",
 ] as const;
+export const ALL_COUPANG_SYNC_JOB_TYPES = [
+  ...COUPANG_SYNC_JOB_TYPES,
+  ...COUPANG_LEGACY_SYNC_JOB_TYPES,
+] as const;
 
-export type CoupangSyncJobType = (typeof COUPANG_SYNC_JOB_TYPES)[number];
+export type CoupangSyncJobType = (typeof ALL_COUPANG_SYNC_JOB_TYPES)[number];
+export type CurrentCoupangSyncJobType = (typeof COUPANG_SYNC_JOB_TYPES)[number];
 export type CoupangSyncKind = "orders" | "products" | "cs";
 export type CoupangSyncJobStatus =
   | "queued"
@@ -24,28 +50,19 @@ export type CoupangSyncJobStatus =
 
 export type CoupangSyncJobSpec = {
   tenantId: string;
-  type: CoupangSyncJobType;
+  type: CurrentCoupangSyncJobType;
   status: "queued";
   payloadRef: string;
   idempotencyKey: string;
-  checkpoint: CoupangSyncCheckpoint;
+  checkpoint: CoupangCollectionCheckpoint;
   scheduledFor: Date;
-};
-
-export type CoupangSyncCheckpoint = JobCheckpoint & {
-  provider: "coupang";
-  syncKind: CoupangSyncKind;
-  stage: "queued" | "ready_for_collection";
-  cursor: string | null;
-  preparedAt?: string;
-  operatorMessage?: string;
 };
 
 export type CoupangSyncJobSummary = {
   headline: string;
   latestIssue: string | null;
   items: {
-    type: CoupangSyncJobType;
+    type: CurrentCoupangSyncJobType;
     label: string;
     statusLabel: string;
     tone: "muted" | "success" | "warning" | "danger";
@@ -66,6 +83,7 @@ type RunnableCoupangJob = {
   type: string;
   checkpoint: JobCheckpoint;
   leaseOwner: string;
+  leaseExpiresAt?: Date | null;
 };
 
 const syncJobDefinitions: Record<
@@ -76,6 +94,21 @@ const syncJobDefinitions: Record<
     operatorMessage: string;
   }
 > = {
+  "coupang.orders.collect": {
+    kind: "orders",
+    label: "주문 수집",
+    operatorMessage: "쿠팡 주문 데이터를 수집했습니다.",
+  },
+  "coupang.products.collect": {
+    kind: "products",
+    label: "상품 확인",
+    operatorMessage: "쿠팡 상품 상태를 확인했습니다.",
+  },
+  "coupang.cs.collect": {
+    kind: "cs",
+    label: "문의 확인",
+    operatorMessage: "쿠팡 문의 데이터를 확인했습니다.",
+  },
   "coupang.orders.collection.prepare": {
     kind: "orders",
     label: "주문 수집",
@@ -106,8 +139,8 @@ export function buildCoupangInitialSyncJobSpecs(input: {
       tenantId: input.tenantId,
       type,
       status: "queued",
-      payloadRef: `coupang:${definition.kind}:collection:prepare`,
-      idempotencyKey: `coupang:${definition.kind}:collection:prepare`,
+      payloadRef: `coupang:${definition.kind}:collect`,
+      idempotencyKey: `coupang:${definition.kind}:collect`,
       checkpoint: {
         provider: "coupang",
         syncKind: definition.kind,
@@ -179,7 +212,7 @@ export async function cancelCoupangSyncJobs(input: {
     .where(
       and(
         eq(jobs.tenantId, input.context.tenantId),
-        inArray(jobs.type, [...COUPANG_SYNC_JOB_TYPES]),
+        inArray(jobs.type, [...ALL_COUPANG_SYNC_JOB_TYPES]),
         inArray(jobs.status, ["queued", "retrying", "leased", "running"]),
       ),
     );
@@ -200,7 +233,7 @@ export async function getCoupangSyncJobSummary(input: {
     .where(
       and(
         eq(jobs.tenantId, input.context.tenantId),
-        inArray(jobs.type, [...COUPANG_SYNC_JOB_TYPES]),
+        inArray(jobs.type, [...ALL_COUPANG_SYNC_JOB_TYPES]),
       ),
     );
 
@@ -210,11 +243,17 @@ export async function getCoupangSyncJobSummary(input: {
 export function summarizeCoupangSyncJobs(
   rows: readonly CoupangSyncJobRow[],
 ): CoupangSyncJobSummary {
-  const rowByType = new Map<CoupangSyncJobType, CoupangSyncJobRow>();
+  const rowByType = new Map<CurrentCoupangSyncJobType, CoupangSyncJobRow>();
 
   for (const row of rows) {
-    if (isCoupangSyncJobType(row.type)) {
-      rowByType.set(row.type, row);
+    const currentType = toCurrentCoupangSyncJobType(row.type);
+
+    if (currentType) {
+      const existing = rowByType.get(currentType);
+
+      if (!existing || isNewerRow(row, existing)) {
+        rowByType.set(currentType, row);
+      }
     }
   }
 
@@ -250,7 +289,8 @@ export function summarizeCoupangSyncJobs(
 
   if (needsAttention.length > 0) {
     const issue = needsAttention[0];
-    const label = issue ? syncJobDefinitions[issue.type as CoupangSyncJobType].label : null;
+    const type = issue ? toCurrentCoupangSyncJobType(issue.type) : null;
+    const label = type ? syncJobDefinitions[type].label : null;
 
     return {
       headline: "확인이 필요한 작업이 있습니다.",
@@ -269,7 +309,7 @@ export function summarizeCoupangSyncJobs(
 
   if (succeededCount === COUPANG_SYNC_JOB_TYPES.length) {
     return {
-      headline: "수집 준비가 완료되었습니다.",
+      headline: "쿠팡 데이터 수집이 완료되었습니다.",
       latestIssue: null,
       items,
     };
@@ -283,19 +323,134 @@ export function summarizeCoupangSyncJobs(
 }
 
 export async function runCoupangSyncJob(input: {
+  db?: DbClient;
+  env?: Pick<ServerEnv, "COUPANG_MARKET" | "PII_ENCRYPTION_KEY">;
+  fetchImpl?: CoupangFetch;
   job: RunnableCoupangJob;
   now?: Date;
+  sleep?: (ms: number) => Promise<void>;
 }): Promise<{
-  status: "succeeded";
-  checkpoint: CoupangSyncCheckpoint;
+  status: "succeeded" | "checkpointed";
+  checkpoint: JobCheckpoint;
   processedCount: number;
 }> {
   if (!isCoupangSyncJobType(input.job.type)) {
     throw new Error(`Unsupported Coupang sync job: ${input.job.type}`);
   }
 
+  if (isLegacyCoupangSyncJobType(input.job.type)) {
+    return runLegacyPreparationJob(input);
+  }
+
+  if (!input.db || !input.env) {
+    throw new Error("Coupang collection jobs require database and environment dependencies");
+  }
+
+  const fixedNow = input.now;
+
+  return runCoupangCollectionJob({
+    deps: {
+      db: input.db,
+      env: input.env,
+      fetchImpl: input.fetchImpl,
+      now: fixedNow ? () => fixedNow : undefined,
+      sleep: input.sleep,
+    },
+    job: input.job,
+  });
+}
+
+export function isCoupangSyncJobType(type: string): type is CoupangSyncJobType {
+  return ALL_COUPANG_SYNC_JOB_TYPES.includes(type as CoupangSyncJobType);
+}
+
+export function isCurrentCoupangSyncJobType(
+  type: string,
+): type is CurrentCoupangSyncJobType {
+  return COUPANG_SYNC_JOB_TYPES.includes(type as CurrentCoupangSyncJobType);
+}
+
+export function getCoupangNextScheduledFor(input: {
+  jobType: string;
+  now?: Date;
+}): Date | null {
+  if (!isCurrentCoupangSyncJobType(input.jobType)) {
+    return null;
+  }
+
+  return new Date(
+    (input.now ?? new Date()).getTime() +
+      COUPANG_COLLECTION_INTERVAL_MS_BY_TYPE[input.jobType],
+  );
+}
+
+export function getCoupangFailureScheduledFor(input: {
+  attempts?: number | null;
+  error: Error;
+  jobType: string;
+  now?: Date;
+}): Date | null {
+  if (!isCurrentCoupangSyncJobType(input.jobType)) {
+    return null;
+  }
+
   const now = input.now ?? new Date();
-  const definition = syncJobDefinitions[input.job.type];
+  const retryAfterMs =
+    input.error instanceof CoupangApiError && input.error.statusCode === 429
+      ? input.error.retryAfterMs
+      : undefined;
+  const attempts = Math.max(1, input.attempts ?? 1);
+  const fallbackBackoff = Math.min(
+    COUPANG_MAX_FAILURE_BACKOFF_MS,
+    COUPANG_DEFAULT_FAILURE_BACKOFF_MS * 2 ** (attempts - 1),
+  );
+
+  return new Date(now.getTime() + (retryAfterMs ?? fallbackBackoff));
+}
+
+export function prepareCoupangCheckpointForNextRun(input: {
+  checkpoint: JobCheckpoint;
+  jobType: string;
+}): JobCheckpoint {
+  if (!isCurrentCoupangSyncJobType(input.jobType)) {
+    return input.checkpoint;
+  }
+
+  const checkpoint = normalizeCoupangCheckpoint(
+    input.checkpoint,
+    syncJobDefinitions[input.jobType].kind,
+  );
+  const previousWindowEnd =
+    typeof input.checkpoint.windowEnd === "string"
+      ? input.checkpoint.windowEnd
+      : undefined;
+
+  return {
+    ...checkpoint,
+    cursor: null,
+    stage: "queued",
+    windowEnd: undefined,
+    windowStart:
+      input.jobType === "coupang.orders.collect" ? previousWindowEnd : undefined,
+  };
+}
+
+function runLegacyPreparationJob(input: {
+  job: RunnableCoupangJob;
+  now?: Date;
+}): {
+  status: "succeeded";
+  checkpoint: JobCheckpoint;
+  processedCount: number;
+} {
+  const now = input.now ?? new Date();
+  const type = input.job.type;
+
+  if (!isLegacyCoupangSyncJobType(type)) {
+    throw new Error(`Unsupported legacy Coupang sync job: ${type}`);
+  }
+
+  const definition = syncJobDefinitions[type];
   const checkpoint = normalizeCoupangCheckpoint(input.job.checkpoint, definition.kind);
 
   return {
@@ -310,14 +465,10 @@ export async function runCoupangSyncJob(input: {
   };
 }
 
-export function isCoupangSyncJobType(type: string): type is CoupangSyncJobType {
-  return COUPANG_SYNC_JOB_TYPES.includes(type as CoupangSyncJobType);
-}
-
 function normalizeCoupangCheckpoint(
   value: JobCheckpoint,
   syncKind: CoupangSyncKind,
-): CoupangSyncCheckpoint {
+): JobCheckpoint {
   return {
     provider: "coupang",
     syncKind,
@@ -327,6 +478,40 @@ function normalizeCoupangCheckpoint(
         ? value.cursor
         : null,
   };
+}
+
+function isLegacyCoupangSyncJobType(
+  type: string,
+): type is (typeof COUPANG_LEGACY_SYNC_JOB_TYPES)[number] {
+  return COUPANG_LEGACY_SYNC_JOB_TYPES.includes(
+    type as (typeof COUPANG_LEGACY_SYNC_JOB_TYPES)[number],
+  );
+}
+
+function toCurrentCoupangSyncJobType(
+  type: string,
+): CurrentCoupangSyncJobType | null {
+  if (COUPANG_SYNC_JOB_TYPES.includes(type as CurrentCoupangSyncJobType)) {
+    return type as CurrentCoupangSyncJobType;
+  }
+
+  if (type === "coupang.orders.collection.prepare") {
+    return "coupang.orders.collect";
+  }
+
+  if (type === "coupang.products.collection.prepare") {
+    return "coupang.products.collect";
+  }
+
+  if (type === "coupang.cs.collection.prepare") {
+    return "coupang.cs.collect";
+  }
+
+  return null;
+}
+
+function isNewerRow(row: CoupangSyncJobRow, existing: CoupangSyncJobRow): boolean {
+  return (row.updatedAt?.getTime() ?? 0) >= (existing.updatedAt?.getTime() ?? 0);
 }
 
 function normalizeSyncStatus(status: string | undefined): CoupangSyncJobStatus | "empty" {
@@ -352,11 +537,11 @@ function getStatusLabel(status: CoupangSyncJobStatus | "empty"): string {
   }
 
   if (status === "leased" || status === "running") {
-    return "진행 중";
+    return "수집 중";
   }
 
   if (status === "succeeded") {
-    return "준비 완료";
+    return "수집 완료";
   }
 
   if (status === "retrying") {

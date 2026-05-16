@@ -1,9 +1,14 @@
 import { sql, type SQLWrapper } from "drizzle-orm";
 import {
+  getCoupangFailureScheduledFor,
+  getCoupangNextScheduledFor,
   isCoupangSyncJobType,
+  prepareCoupangCheckpointForNextRun,
   runCoupangSyncJob,
 } from "@/server/coupang/sync-jobs";
+import type { CoupangFetch } from "@/server/coupang/coupang-client";
 import type { DbClient } from "@/server/db/client";
+import type { ServerEnv } from "@/server/env-core";
 import { runBoundedJob, type JobCheckpoint } from "@/server/jobs/runner";
 
 export type LeasedJob = {
@@ -183,15 +188,33 @@ export async function markJobFinished(
     processedCount: number;
   },
 ): Promise<void> {
-  const status = result.status === "succeeded" ? "succeeded" : "queued";
+  const now = new Date();
+  const nextScheduledFor =
+    result.status === "succeeded"
+      ? getCoupangNextScheduledFor({
+          jobType: job.type,
+          now,
+        })
+      : null;
+  const jobStatus =
+    result.status === "succeeded" && !nextScheduledFor ? "succeeded" : "queued";
+  const runStatus = result.status === "succeeded" ? "succeeded" : "queued";
+  const checkpoint = nextScheduledFor
+    ? prepareCoupangCheckpointForNextRun({
+        checkpoint: result.checkpoint,
+        jobType: job.type,
+      })
+    : result.checkpoint;
 
   await db.transaction(async (tx) => {
     const updated = await updateOwnedJobLease(tx, sql`
       UPDATE jobs
-      SET status = ${status},
-          checkpoint = ${JSON.stringify(result.checkpoint)}::jsonb,
+      SET status = ${jobStatus},
+          checkpoint = ${JSON.stringify(checkpoint)}::jsonb,
           lease_owner = NULL,
           lease_expires_at = NULL,
+          scheduled_for = COALESCE(${nextScheduledFor ?? null}, scheduled_for),
+          attempts = CASE WHEN ${Boolean(nextScheduledFor)} THEN 0 ELSE attempts END,
           updated_at = now()
       WHERE id = ${job.id}
         AND lease_owner = ${job.leaseOwner}
@@ -214,7 +237,7 @@ export async function markJobFinished(
       VALUES (
         ${updated.tenantId ?? job.tenantId ?? null},
         ${updated.id},
-        ${status},
+        ${runStatus},
         ${job.leaseOwner},
         ${job.leaseExpiresAt ?? null},
         ${updated.attempts ?? job.attempts ?? 0},
@@ -232,6 +255,12 @@ export async function markJobFailed(
   job: LeasedJob,
   error: Error,
 ): Promise<void> {
+  const retryScheduledFor = getCoupangFailureScheduledFor({
+    attempts: job.attempts,
+    error,
+    jobType: job.type,
+  });
+
   await db.transaction(async (tx) => {
     const updated = await updateOwnedJobLease(tx, sql`
       UPDATE jobs
@@ -239,6 +268,10 @@ export async function markJobFailed(
           last_error = ${error.message},
           lease_owner = NULL,
           lease_expires_at = NULL,
+          scheduled_for = CASE
+            WHEN attempts >= 5 THEN scheduled_for
+            ELSE COALESCE(${retryScheduledFor ?? null}, scheduled_for)
+          END,
           updated_at = now()
       WHERE id = ${job.id}
         AND lease_owner = ${job.leaseOwner}
@@ -300,9 +333,23 @@ export async function markJobFailed(
   });
 }
 
-export async function runRegisteredJob(job: LeasedJob) {
+export async function runRegisteredJob(
+  job: LeasedJob,
+  deps?: {
+    db?: DbClient;
+    env?: Pick<ServerEnv, "COUPANG_MARKET" | "PII_ENCRYPTION_KEY">;
+    fetchImpl?: CoupangFetch;
+    sleep?: (ms: number) => Promise<void>;
+  },
+) {
   if (isCoupangSyncJobType(job.type)) {
-    return runCoupangSyncJob({ job });
+    return runCoupangSyncJob({
+      db: deps?.db,
+      env: deps?.env,
+      fetchImpl: deps?.fetchImpl,
+      job,
+      sleep: deps?.sleep,
+    });
   }
 
   if (job.type !== "retention.cleanup") {
