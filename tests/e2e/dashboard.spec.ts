@@ -47,6 +47,25 @@ const stableNavLabels = [
   "온보딩",
 ] as const;
 
+type DesignSyncManifest = {
+  exportDir: string;
+  frames: {
+    height: number;
+    referenceId: string;
+    route: string;
+    width: number;
+  }[];
+  scale: number;
+};
+
+const designSyncManifest = JSON.parse(
+  readFileSync(`${process.cwd()}/design/sync-manifest.json`, "utf8"),
+) as DesignSyncManifest;
+const latestDesignExportDir = `${process.cwd()}/${designSyncManifest.exportDir}`;
+const designFrameByReference = new Map(
+  designSyncManifest.frames.map((frame) => [frame.referenceId, frame]),
+);
+
 async function expectStableLnb(page: Page, activeLabel: string) {
   const nav = page.getByRole("navigation", { name: "주요 메뉴" });
 
@@ -61,6 +80,90 @@ async function expectStableLnb(page: Page, activeLabel: string) {
     "page",
   );
   await expect(page.locator(".ops-sidebar")).toHaveCount(0);
+}
+
+async function expectHealthyVisualLayout(page: Page, context: string) {
+  const report = await page.evaluate(() => {
+    const viewportWidth = window.innerWidth;
+    const scrollWidth = Math.max(
+      document.documentElement.scrollWidth,
+      document.body.scrollWidth,
+    );
+    const offenders = Array.from(
+      document.querySelectorAll<HTMLElement>("body *"),
+    )
+      .filter((element) => {
+        const style = getComputedStyle(element);
+        if (
+          style.display === "none" ||
+          style.visibility === "hidden" ||
+          style.opacity === "0"
+        ) {
+          return false;
+        }
+
+        const rect = element.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+          return false;
+        }
+
+        return rect.left < -1 || rect.right > viewportWidth + 1;
+      })
+      .slice(0, 5)
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          className: element.className.toString(),
+          tagName: element.tagName.toLowerCase(),
+          text: element.textContent?.trim().slice(0, 60) ?? "",
+          x: Math.round(rect.left),
+          width: Math.round(rect.width),
+        };
+      });
+
+    return {
+      offenders,
+      overflow: Math.round(scrollWidth - viewportWidth),
+    };
+  });
+
+  expect(report.overflow, `${context} has horizontal document overflow`).toBeLessThanOrEqual(1);
+  expect(report.offenders, `${context} has visible elements outside the viewport`).toEqual([]);
+}
+
+function expectDesignExport(referenceId: string) {
+  const frame = designFrameByReference.get(referenceId);
+  const exportPath = `${latestDesignExportDir}/${referenceId}.png`;
+
+  expect(frame, `${referenceId} must be declared in /design/sync-manifest.json`).toBeTruthy();
+  expect(existsSync(exportPath), `${referenceId} must have a synced /design export`).toBe(true);
+
+  const image = readPngSize(exportPath);
+  expect(
+    image.width,
+    `${referenceId} export width must match the pen frame at ${designSyncManifest.scale}x`,
+  ).toBe(frame!.width * designSyncManifest.scale);
+  expect(
+    image.height,
+    `${referenceId} export height must match the pen frame at ${designSyncManifest.scale}x`,
+  ).toBe(frame!.height * designSyncManifest.scale);
+  expect(
+    image.byteLength,
+    `${referenceId} must have a synced /design export`,
+  ).toBeGreaterThan(10_000);
+}
+
+function readPngSize(path: string) {
+  const buffer = readFileSync(path);
+  const signature = buffer.subarray(0, 8).toString("hex");
+
+  expect(signature, `${path} must be a PNG`).toBe("89504e470d0a1a0a");
+
+  return {
+    byteLength: buffer.byteLength,
+    height: buffer.readUInt32BE(20),
+    width: buffer.readUInt32BE(16),
+  };
 }
 
 async function startPasswordAuthServer(port: number) {
@@ -606,6 +709,98 @@ test.describe("Korean consignment operations UI", () => {
       await expect(page.getByText(visibleText).first()).toBeVisible();
       await expectStableLnb(page, activeLabel);
       await expectNoDeveloperCopy(page);
+    }
+  });
+
+  test("keeps every designed route responsive and synced with exported pen frames", async ({
+    browser,
+    page,
+  }, testInfo) => {
+    const publicRoutes = [
+      ["/sign-in", "YA9gq", "운영 워크스페이스에 로그인"],
+      ["/sign-up", "ypY4e", "워크스페이스 시작"],
+    ] as const;
+    const protectedRoutes = [
+      ["/app", "DkLfQ", "오늘 처리 대시보드"],
+      ["/app/orders", "dhrCg", "주문 목록"],
+      ["/app/orders/review", "P3jyw1", "발주 승인 검토"],
+      ["/app/orders/approval", "mFQBl", "승인 상세 패널"],
+      ["/app/cs", "u347IV", "CS 인박스"],
+      ["/app/cs/detail", "LFAF9", "답변 초안 승인"],
+      ["/app/claims", "vf3YB", "취소·반품"],
+      ["/app/integrations", "jnl9R", "마켓 연동"],
+      ["/app/products", "Ro2UR", "상품·재고 모니터링"],
+      ["/app/history", "H2Nuw", "작업 이력·알림"],
+      ["/app/margins", "KiqBh", "가격·마진 모니터링"],
+    ] as const;
+    const viewports = [
+      { height: 1024, label: "desktop", width: 1440 },
+      { height: 1180, label: "tablet", width: 820 },
+      { height: 844, label: "mobile", width: 390 },
+    ] as const;
+
+    for (const [, referenceId] of [...publicRoutes, ...protectedRoutes]) {
+      expectDesignExport(referenceId);
+    }
+    expectDesignExport("GlQOZ");
+
+    const passwordServer = await startPasswordAuthServer(3500 + testInfo.workerIndex);
+    const passwordContext = await browser.newContext();
+    const passwordPage = await passwordContext.newPage();
+
+    try {
+      for (const viewport of viewports) {
+        await passwordPage.setViewportSize({
+          height: viewport.height,
+          width: viewport.width,
+        });
+
+        for (const [url, referenceId, heading] of publicRoutes) {
+          await passwordPage.goto(`${passwordServer.baseURL}${url}`);
+          await expect(passwordPage.locator(`[data-reference="${referenceId}"]`)).toBeVisible();
+          await expect(passwordPage.getByRole("heading", { name: heading })).toBeVisible();
+          await expect(passwordPage.getByLabel("비밀번호")).toBeVisible();
+
+          if (referenceId === "YA9gq") {
+            await expect(passwordPage.getByLabel("워크스페이스")).toHaveCount(0);
+          } else {
+            await expect(passwordPage.getByText("Operator")).toHaveCount(0);
+            await expect(passwordPage.getByText("소유자")).toHaveCount(0);
+          }
+
+          await expectHealthyVisualLayout(passwordPage, `${viewport.label} ${url}`);
+        }
+      }
+    } finally {
+      await passwordContext.close();
+      await passwordServer.stop();
+    }
+
+    await page.setViewportSize({ height: 1024, width: 1440 });
+    await signIn(page);
+    const primaryButtonColor = await page
+      .locator(".ops-primary-button")
+      .first()
+      .evaluate((element) => getComputedStyle(element).backgroundColor);
+    expect(primaryButtonColor).toBe("rgb(15, 118, 110)");
+
+    for (const viewport of viewports) {
+      await page.setViewportSize({
+        height: viewport.height,
+        width: viewport.width,
+      });
+
+      for (const [url, referenceId, heading] of protectedRoutes) {
+        await page.goto(url);
+        const effectiveReferenceId =
+          viewport.width <= 520 && referenceId === "DkLfQ" ? "GlQOZ" : referenceId;
+        const effectiveHeading =
+          viewport.width <= 520 && referenceId === "DkLfQ" ? "오늘 처리" : heading;
+
+        await expect(page.locator(`[data-reference="${effectiveReferenceId}"]`)).toBeVisible();
+        await expect(page.getByRole("heading", { name: effectiveHeading })).toBeVisible();
+        await expectHealthyVisualLayout(page, `${viewport.label} ${url}`);
+      }
     }
   });
 

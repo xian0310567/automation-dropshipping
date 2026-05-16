@@ -1,0 +1,29 @@
+{
+  "updatedAt": "2026-05-16T06:13:41Z",
+  "penFile": "design/coupang-ownerclan-ops.pen",
+  "exportDir": "design/exports/qa-20260516T061341Z",
+  "scale": 2,
+  "notes": [
+    "가입 화면은 직접 구현한 비밀번호 계정 흐름을 기준으로 역할 선택 카드 대신 비밀번호 필드를 사용한다.",
+    "앱 전역 토큰은 pen 변수의 bg, surface, border, teal, text-primary, text-secondary 값을 기준으로 맞춘다.",
+    "모바일 오늘 처리 화면은 데스크톱 DkLfQ 대신 GlQOZ 프레임을 기준으로 검증한다."
+  ],
+  "frames": [
+    { "route": "/", "referenceId": "n9rOC", "width": 1440, "height": 960, "surface": "디자인 브리프" },
+    { "route": "/sign-in", "referenceId": "YA9gq", "width": 1440, "height": 1024, "surface": "로그인" },
+    { "route": "/sign-up", "referenceId": "ypY4e", "width": 1440, "height": 1024, "surface": "회원가입" },
+    { "route": "/app", "referenceId": "DkLfQ", "width": 1440, "height": 1024, "surface": "오늘 처리 대시보드" },
+    { "route": "/app", "referenceId": "GlQOZ", "width": 430, "height": 900, "surface": "모바일 오늘 처리" },
+    { "route": "/app/orders", "referenceId": "dhrCg", "width": 1440, "height": 1024, "surface": "주문 목록" },
+    { "route": "/app/orders/review", "referenceId": "P3jyw1", "width": 1440, "height": 1024, "surface": "주문 상세" },
+    { "route": "/app/orders/approval", "referenceId": "mFQBl", "width": 1440, "height": 1024, "surface": "승인 상세 패널" },
+    { "route": "/app/cs", "referenceId": "u347IV", "width": 1440, "height": 1024, "surface": "CS 인박스" },
+    { "route": "/app/cs/detail", "referenceId": "LFAF9", "width": 1440, "height": 1024, "surface": "CS 상세" },
+    { "route": "/app/claims", "referenceId": "vf3YB", "width": 1440, "height": 1024, "surface": "취소·반품" },
+    { "route": "/app/integrations", "referenceId": "jnl9R", "width": 1440, "height": 1024, "surface": "마켓 연동" },
+    { "route": "/app/products", "referenceId": "Ro2UR", "width": 1440, "height": 1024, "surface": "상품·재고" },
+    { "route": "/app/history", "referenceId": "H2Nuw", "width": 1440, "height": 1024, "surface": "작업 이력" },
+    { "route": "/app/margins", "referenceId": "KiqBh", "width": 1440, "height": 1024, "surface": "가격·마진" },
+    { "route": "/app/onboarding", "referenceId": "wxMIN", "width": 1440, "height": 1024, "surface": "온보딩" }
+  ]
+}

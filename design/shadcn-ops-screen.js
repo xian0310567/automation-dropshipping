@@ -300,20 +300,52 @@ function mobileToday(data) {
 function publicScreen(kind) {
   const isSignup = kind === "signup";
   const nodes = [box(0, 0, pencil.width, pencil.height, colors.bg, null, 0)];
-  nodes.push(box(198, 202, isSignup ? 500 : 560, isSignup ? 600 : 520, isSignup ? colors.surface : colors.muted, colors.border, 8));
-  nodes.push(t(230, 236, 170, isSignup ? "워크스페이스 시작" : "Coupang Ownerclan Ops", 14, "700", colors.teal));
-  nodes.push(t(230, 270, isSignup ? 430 : 490, isSignup ? "워크스페이스 시작" : "주문과 CS를 안전하게 처리하는 운영 워크스페이스", isSignup ? 24 : 28, "800", colors.text, 1.2));
-  nodes.push(t(230, isSignup ? 314 : 350, isSignup ? 430 : 490, isSignup ? "대표 운영자가 판매자 워크스페이스를 만들고 팀원을 초대합니다." : "쿠팡 주문, 오너클랜 발주, 송장, 취소·반품 위험, CS 답변 초안을 한 화면에서 확인합니다.", 14, "400", colors.sub, 1.6));
-  const formX = isSignup ? 722 : 782;
-  nodes.push(box(formX, isSignup ? 202 : 287, isSignup ? 520 : 460, isSignup ? 600 : 384, colors.surface, colors.border, 8));
-  nodes.push(t(formX + 32, isSignup ? 234 : 319, 360, isSignup ? "가입 후 바로 필요한 세 가지" : "운영 워크스페이스에 로그인", 22, "800", colors.text));
-  nodes.push(t(formX + 32, isSignup ? 276 : 360, 360, isSignup ? "판매자 프로필, 연동 준비, 알림 기준을 차례로 확인합니다." : "작업자 계정과 워크스페이스를 확인한 뒤 보호된 대시보드로 이동합니다.", 14, "400", colors.sub, 1.55));
-  [0, 1, 2].forEach((i) => {
-    const y = (isSignup ? 338 : 430) + i * 68;
-    nodes.push(box(formX + 32, y, isSignup ? 456 : 396, 44, colors.surface, colors.border, 8));
+
+  if (isSignup) {
+    nodes.push(box(198, 182, 500, 680, colors.surface, colors.border, 8));
+    nodes.push(t(230, 236, 430, "워크스페이스 시작", 24, "800", colors.text, 1.2));
+    nodes.push(t(230, 286, 430, "대표 운영자가 판매자 워크스페이스를 만들고, 비밀번호로 보호되는 계정을 만든 뒤 팀원을 초대합니다.", 14, "400", colors.sub, 1.6));
+
+    [
+      ["이메일", "owner@example.com"],
+      ["이름", "대표 운영자"],
+      ["워크스페이스 이름", "Demo Seller"],
+      ["비밀번호", "영문과 숫자 포함 10자 이상"],
+    ].forEach((field, i) => {
+      const y = 370 + i * 92;
+      nodes.push(t(230, y, 420, field[0], 13, "700", colors.text));
+      nodes.push(box(230, y + 28, 436, 46, colors.surface, colors.border, 6));
+      nodes.push(t(244, y + 42, 360, field[1], 14, "400", colors.sub));
+    });
+
+    nodes.push(box(230, 774, 436, 48, colors.teal, null, 6));
+    nodes.push(t(412, 789, 90, "온보딩 시작", 14, "700", "#FFFFFF"));
+    nodes.push(box(718, 182, 520, 660, colors.muted, colors.border, 8));
+    nodes.push(t(750, 232, 360, "가입 후 바로 필요한 세 가지", 22, "800", colors.text));
+    [["1. 판매자 프로필", "쿠팡 벤더 ID와 운영 지역, 담당자 연락 채널을 먼저 고정합니다."], ["2. 연동 준비", "쿠팡 주문 수집, 오너클랜 발주 방식, CSV 처리 범위를 확인합니다."], ["3. 알림·확인 기준", "발주, 송장, CS 답변, 반품은 확인 흐름으로 시작합니다."]].forEach((step, i) => {
+      const y = 312 + i * 142;
+      nodes.push(box(750, y, 456, 118, colors.surface, colors.border, 8));
+      nodes.push(t(772, y + 24, 280, step[0], 17, "800", colors.text));
+      nodes.push(t(772, y + 58, 390, step[1], 14, "400", colors.sub, 1.5));
+    });
+    return nodes;
+  }
+
+  nodes.push(box(198, 202, 560, 520, colors.muted, colors.border, 8));
+  nodes.push(t(230, 236, 170, "Coupang Ownerclan Ops", 14, "700", colors.teal));
+  nodes.push(t(230, 270, 490, "주문과 CS를 안전하게 처리하는 운영 워크스페이스", 28, "800", colors.text, 1.2));
+  nodes.push(t(230, 350, 490, "쿠팡 주문, 오너클랜 발주, 송장, 취소·반품 위험, CS 답변 초안을 한 화면에서 확인합니다.", 14, "400", colors.sub, 1.6));
+  nodes.push(box(782, 287, 460, 384, colors.surface, colors.border, 8));
+  nodes.push(t(814, 319, 360, "운영 워크스페이스에 로그인", 22, "800", colors.text));
+  nodes.push(t(814, 360, 360, "작업자 계정과 비밀번호를 확인한 뒤 보호된 대시보드로 이동합니다.", 14, "400", colors.sub, 1.55));
+  [["이메일", "operator@example.com"], ["비밀번호", "••••••••••"]].forEach((field, i) => {
+    const y = 430 + i * 78;
+    nodes.push(t(814, y, 360, field[0], 13, "700", colors.text));
+    nodes.push(box(814, y + 28, 396, 44, colors.surface, colors.border, 8));
+    nodes.push(t(828, y + 41, 320, field[1], 14, "400", colors.sub));
   });
-  nodes.push(box(formX + 32, isSignup ? 560 : 612, isSignup ? 456 : 396, 38, colors.teal, null, 8));
-  nodes.push(t(formX + 42, isSignup ? 570 : 622, 160, isSignup ? "온보딩 시작" : "대시보드로 이동", 14, "700", "#FFFFFF"));
+  nodes.push(box(814, 612, 396, 38, colors.teal, null, 8));
+  nodes.push(t(948, 622, 90, "대시보드로 이동", 14, "700", "#FFFFFF"));
   return nodes;
 }
 

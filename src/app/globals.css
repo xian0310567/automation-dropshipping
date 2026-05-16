@@ -5,40 +5,40 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --primary: #0f766e;
+  --primary-foreground: #ffffff;
+  --destructive: #dc2626;
   --warning: #d97706;
   --info: #2563eb;
-  --ring: oklch(0.708 0 0);
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --ring: #0f766e;
+  --radius: 0.5rem;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #0f766e;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f1f5f9;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #0f766e;
 }
 
 @theme inline {
@@ -262,6 +262,14 @@ input:focus-visible {
 
 .app-nav-label-short {
   display: none;
+}
+
+.app-nav-label,
+.app-nav-label-short {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-sidebar-footer {
@@ -1036,7 +1044,7 @@ input:focus-visible {
 
 .auth-screen {
   display: grid;
-  grid-template-columns: minmax(420px, 520px) minmax(380px, 440px);
+  grid-template-columns: minmax(0, 520px) minmax(0, 440px);
   align-items: center;
   justify-content: center;
   gap: 20px;
@@ -1049,6 +1057,7 @@ input:focus-visible {
 .auth-form-card,
 .signup-form-card,
 .signup-steps-card {
+  min-width: 0;
   padding: 24px;
 }
 
@@ -1173,6 +1182,15 @@ input:focus-visible {
   background: var(--primary);
   font-size: 14px;
   font-weight: 760;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.auth-form button[type="submit"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px color-mix(in oklch, var(--primary) 18%, transparent);
 }
 
 .auth-error {
@@ -1202,7 +1220,7 @@ input:focus-visible {
 }
 
 .signup-screen {
-  grid-template-columns: minmax(420px, 500px) minmax(460px, 500px);
+  grid-template-columns: minmax(0, 500px) minmax(0, 520px);
 }
 
 .signup-form-card,
@@ -1427,16 +1445,18 @@ input:focus-visible {
 
   .app-nav {
     display: flex;
-    gap: 4px;
+    gap: 3px;
     min-width: 0;
     max-width: 100%;
-    overflow-x: auto;
+    overflow: visible;
     padding: 0;
   }
 
   .app-nav-item {
-    flex: 0 0 auto;
-    min-width: max-content;
+    flex: 1 1 82px;
+    min-width: 0;
+    gap: 6px;
+    padding: 0 8px;
   }
 
   .review-grid,
