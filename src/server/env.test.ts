@@ -17,11 +17,9 @@ const baseEnv = {
   OPERATOR_API_KEY: "operator-secret",
   OPERATOR_ACTOR_ID: "actor-1",
   OPERATOR_ROLE: "owner" as const,
-  AUTH_PROVIDER_MODE: "clerk" as const,
+  AUTH_PROVIDER_MODE: "password" as const,
   AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION: "false" as const,
   E2E_TEST_MODE: "false" as const,
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_example",
-  CLERK_SECRET_KEY: "sk_test_example",
   BLOB_READ_WRITE_TOKEN: "blob-secret",
   COUPANG_VENDOR_ID: "vendor-1",
   COUPANG_ACCESS_KEY: "access",
@@ -57,20 +55,16 @@ describe("env validation", () => {
         VERCEL_ENV: "preview",
         AUTH_PROVIDER_MODE: "development",
         AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION: "true",
-        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: undefined,
-        CLERK_SECRET_KEY: undefined,
       }),
     ).not.toThrow();
   });
 
-  it("allows locked bootstrap production without Clerk keys when development sessions are disabled", () => {
+  it("allows locked bootstrap production when development sessions are disabled", () => {
     expect(() =>
       assertProductionEnv({
         ...baseEnv,
         AUTH_PROVIDER_MODE: "development",
         AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION: "false",
-        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: undefined,
-        CLERK_SECRET_KEY: undefined,
       }),
     ).not.toThrow();
   });
@@ -81,8 +75,6 @@ describe("env validation", () => {
         ...baseEnv,
         AUTH_PROVIDER_MODE: "development",
         AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION: "true",
-        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: undefined,
-        CLERK_SECRET_KEY: undefined,
       }),
     ).toThrow(/not allowed in public Vercel production/);
   });

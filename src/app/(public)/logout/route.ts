@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
-import { clearDevelopmentSessionCookie } from "@/server/auth/session";
+import { clearAuthSessionCookie } from "@/server/auth/session";
 
 export async function GET() {
-  await clearDevelopmentSessionCookie();
+  await clearAuthSessionCookie();
   redirect("/sign-in");
 }

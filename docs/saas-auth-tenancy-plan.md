@@ -21,12 +21,13 @@ The temporary `OPERATOR_API_KEY` flow remains useful for local MVP development, 
 
 ## Auth Provider Decision
 
-Provider decision is now recorded in [auth.md](auth.md): Clerk is the production auth provider for Vercel, with a local development session fallback for E2E and pre-key development.
+Provider decision is now recorded in [auth.md](auth.md): first-party email/password auth is the production auth path for Vercel, with a local development session fallback for E2E and preview validation.
 
 Candidate directions considered:
 
-- Managed SaaS auth provider: fastest for signup/login, invitations, sessions, and future team management.
-- Auth.js/NextAuth-style self-managed auth: more control, more responsibility for account/session/invitation behavior.
+- Managed SaaS auth provider: fastest for signup/login, invitations, sessions, and future team management, but it adds another service to manage.
+- First-party email/password auth: fewer external accounts and keys, but the app owns password hashing, sessions, recovery, and account management.
+- Auth.js/NextAuth-style self-managed auth: more provider flexibility, more framework surface area than this MVP currently needs.
 - Vercel Sign in with Vercel: useful for owner/admin scenarios, but not necessarily enough for public seller signup.
 
 Decision criteria:
@@ -42,7 +43,7 @@ Official references checked for this planning pass:
 
 - Next.js Authentication guide: `https://nextjs.org/docs/app/guides/authentication`
 - Vercel Sign in with Vercel guide: `https://vercel.com/docs/sign-in-with-vercel/getting-started`
-- Clerk Next.js App Router auth reference: `https://clerk.com/docs/reference/nextjs/app-router/auth`
+- Installed Next.js App Router docs for Server Actions, cookies, and Proxy behavior.
 
 Re-check current official docs before implementation.
 
@@ -89,7 +90,7 @@ Re-check current official docs before implementation.
 ## Open Decisions
 
 - [ ] Public self-serve signup, invite-only beta, or owner-created accounts first?
-- [x] Which auth provider should be used? Clerk.
+- [x] Which auth provider should be used? First-party email/password auth backed by Neon.
 - [ ] Which billing provider and plan limits should gate usage?
 - [ ] Whether every user gets one default tenant or must create/join a tenant explicitly.
 - [ ] Whether `viewer` can see masked PII or only aggregate status.

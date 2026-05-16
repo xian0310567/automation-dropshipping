@@ -119,6 +119,23 @@ export const users = pgTable(
   ],
 );
 
+export const passwordCredentials = pgTable(
+  "password_credentials",
+  {
+    userId: uuid("user_id")
+      .primaryKey()
+      .references(() => users.id),
+    passwordHash: text("password_hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("password_credentials_updated_idx").on(table.updatedAt)],
+);
+
 export const tenants = pgTable(
   "tenants",
   {
@@ -139,6 +156,59 @@ export const tenants = pgTable(
   (table) => [
     uniqueIndex("tenants_slug_unique").on(table.slug),
     index("tenants_status_idx").on(table.status),
+  ],
+);
+
+export const authSessions = pgTable(
+  "auth_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("auth_sessions_token_hash_unique").on(table.tokenHash),
+    index("auth_sessions_user_expires_idx").on(table.userId, table.expiresAt),
+    index("auth_sessions_expires_idx").on(table.expiresAt),
+  ],
+);
+
+export const authRateLimits = pgTable(
+  "auth_rate_limits",
+  {
+    key: text("key").primaryKey(),
+    action: text("action").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    windowStartedAt: timestamp("window_started_at", {
+      withTimezone: true,
+    }).notNull(),
+    lockedUntil: timestamp("locked_until", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("auth_rate_limits_action_updated_idx").on(
+      table.action,
+      table.updatedAt,
+    ),
+    index("auth_rate_limits_locked_until_idx").on(table.lockedUntil),
   ],
 );
 

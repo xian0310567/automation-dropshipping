@@ -27,11 +27,9 @@ The Playwright web server uses test-only placeholder server environment values f
 - `CRON_SECRET`: Vercel Cron bearer secret.
 - `OPERATOR_API_KEY`: temporary local/MVP key for protected dashboard APIs before SaaS auth is implemented.
 - `OPERATOR_ACTOR_ID`, `OPERATOR_ROLE`: temporary server-resolved actor identity for the single-operator MVP.
-- `AUTH_PROVIDER_MODE`: `development` for local/E2E auth shell and locked pre-public bootstrap, `clerk` for user-accessible production SaaS.
+- `AUTH_PROVIDER_MODE`: `password` for user-accessible production SaaS, `development` for local/E2E auth shell and locked bootstrap checks.
 - `AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION`: only `true` for Playwright `next start` E2E or protected non-production Vercel preview validation. Public Vercel production rejects development sessions.
 - `E2E_TEST_MODE`: only `true` for Playwright browser tests that run against placeholder service dependencies.
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`: Clerk browser publishable key.
-- `CLERK_SECRET_KEY`: Clerk server secret key.
 - `COUPANG_VENDOR_ID`, `COUPANG_ACCESS_KEY`, `COUPANG_SECRET_KEY`: legacy single-seller Coupang credentials for older jobs. New SaaS seller credentials are stored per tenant in encrypted `integration_accounts` rows.
 - `BLOB_READ_WRITE_TOKEN`: Vercel Blob token.
 - `PII_ENCRYPTION_KEY`: encryption key for receiver PII and tenant-scoped marketplace credential envelopes.
@@ -42,7 +40,7 @@ Protected routes must resolve actor identity from server-side configuration or a
 
 ## SaaS Authentication And Tenancy
 
-Production SaaS auth provider: Clerk. See [auth.md](auth.md) for the decision record. During the pre-public deployment phase, protected Vercel Preview deployments can run with `AUTH_PROVIDER_MODE=development` and `AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION=true` so the operator can verify the deployed SaaS shell, database, uploads, and marketplace integration flows before Clerk keys exist. Public Production deployments may run in locked bootstrap mode with `AUTH_PROVIDER_MODE=development` and `AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION=false`; this keeps development sessions disabled until Clerk keys are configured.
+Production SaaS auth provider: first-party email/password auth backed by Neon. See [auth.md](auth.md) for the decision record. Protected Vercel Preview deployments can still run with `AUTH_PROVIDER_MODE=development` and `AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION=true` so the operator can verify the deployed SaaS shell, database, uploads, and marketplace integration flows without creating test accounts. Public Production should run with `AUTH_PROVIDER_MODE=password`.
 
 Before public deployment, replace the temporary operator key model with:
 
@@ -52,7 +50,7 @@ Before public deployment, replace the temporary operator key model with:
 4. Tenant-scoped integration accounts so Coupang and Ownerclan credentials are never global process-wide seller state.
 5. Tenant allowlists on every dashboard query, job, approval, upload, provider request, notification, and audit log.
 6. A first-run onboarding flow that creates the workspace, verifies the seller's Coupang/Ownerclan readiness, and stores credentials encrypted.
-7. A production decision record for the auth provider before implementation.
+7. Account management and password recovery before external team rollout.
 
 Vercel Cron still uses `CRON_SECRET`, but cron jobs must derive tenant work from database schedules and never from request-supplied tenant ids.
 

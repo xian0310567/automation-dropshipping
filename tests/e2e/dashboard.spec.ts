@@ -1,5 +1,8 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
+import { neon } from "@neondatabase/serverless";
 import { expect, test, type Page } from "@playwright/test";
 
 async function signIn(
@@ -60,21 +63,21 @@ async function expectStableLnb(page: Page, activeLabel: string) {
   await expect(page.locator(".ops-sidebar")).toHaveCount(0);
 }
 
-async function startLockedBootstrapServer(port: number) {
+async function startPasswordAuthServer(port: number) {
   const output: string[] = [];
+  const databaseUrl = getRequiredPasswordAuthDatabaseUrl("DATABASE_URL");
+  const databaseDirectUrl = getRequiredPasswordAuthDatabaseUrl("DATABASE_DIRECT_URL");
   const server = spawn("pnpm", ["exec", "next", "start", "-p", String(port)], {
     cwd: process.cwd(),
     env: {
       ...process.env,
       AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION: "false",
-      AUTH_PROVIDER_MODE: "development",
+      AUTH_PROVIDER_MODE: "password",
       BLOB_READ_WRITE_TOKEN: "playwright-blob-token",
       CRON_SECRET: "playwright-cron-secret",
-      DATABASE_DIRECT_URL: "postgres://playwright-direct",
-      DATABASE_URL: "postgres://playwright-runtime",
+      DATABASE_DIRECT_URL: databaseDirectUrl,
+      DATABASE_URL: databaseUrl,
       E2E_TEST_MODE: "false",
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "",
-      CLERK_SECRET_KEY: "",
       OPERATOR_ACTOR_ID: "playwright-operator",
       OPERATOR_API_KEY: "playwright-operator-key",
       PII_ENCRYPTION_KEY: "playwright-pii-key",
@@ -101,6 +104,156 @@ async function startLockedBootstrapServer(port: number) {
   };
 }
 
+async function cleanupPasswordAuthAccount(email: string) {
+  const sql = neon(getRequiredPasswordAuthDatabaseUrl("DATABASE_URL"));
+  const userRows = (await sql`
+    select id from users where email = ${email}
+  `) as { id: string }[];
+
+  for (const user of userRows) {
+    const tenantRows = (await sql`
+      select tenant_id from memberships where user_id = ${user.id}
+    `) as { tenant_id: string }[];
+
+    await sql`delete from auth_sessions where user_id = ${user.id}`;
+    await sql`delete from password_credentials where user_id = ${user.id}`;
+    await sql`delete from memberships where user_id = ${user.id}`;
+
+    for (const tenant of tenantRows) {
+      await sql`delete from tenants where id = ${tenant.tenant_id}`;
+    }
+
+    await sql`delete from users where id = ${user.id}`;
+  }
+}
+
+async function passwordAuthAccountExists(email: string) {
+  const sql = neon(getRequiredPasswordAuthDatabaseUrl("DATABASE_URL"));
+  const rows = (await sql`
+    select id from users where email = ${email} limit 1
+  `) as { id: string }[];
+
+  return rows.length > 0;
+}
+
+async function cleanupPasswordAuthThrottle(
+  ipAddress: string,
+  emails: string[] = [],
+) {
+  const sql = neon(getRequiredPasswordAuthDatabaseUrl("DATABASE_URL"));
+  const keys = [
+    buildAuthThrottleKeyForTest("sign-up", ipAddress),
+    buildAuthThrottleKeyForTest("sign-in", ipAddress),
+    ...emails.map((email) =>
+      buildAuthThrottleKeyForTest("sign-in", ipAddress, email),
+    ),
+  ];
+
+  for (const key of keys) {
+    await sql`delete from auth_rate_limits where key = ${key}`;
+  }
+}
+
+function buildAuthThrottleKeyForTest(
+  action: "sign-in" | "sign-up",
+  ipAddress: string,
+  email?: string,
+) {
+  const normalizedEmail = email ? email.trim().toLowerCase() : "no-email";
+  const digest = createHash("sha256")
+    .update(`${action}:${ipAddress}:${normalizedEmail}`)
+    .digest("hex");
+
+  return `${action}:${digest}`;
+}
+
+async function fillPasswordSignupForm(
+  page: Page,
+  input: {
+    email: string;
+    name: string;
+    tenantName: string;
+    password: string;
+  },
+) {
+  await page.getByLabel("이메일").fill(input.email);
+  await page.getByLabel("이름", { exact: true }).fill(input.name);
+  await page
+    .getByLabel("워크스페이스 이름", { exact: true })
+    .fill(input.tenantName);
+  await page.getByLabel("비밀번호").fill(input.password);
+}
+
+async function submitPasswordSignup(
+  page: Page,
+  baseURL: string,
+  input: {
+    email: string;
+    name: string;
+    tenantName: string;
+    password: string;
+  },
+) {
+  await page.goto(`${baseURL}/sign-up`);
+  await fillPasswordSignupForm(page, input);
+  await page.getByRole("button", { name: "온보딩 시작" }).click();
+}
+
+async function fillPasswordSigninForm(
+  page: Page,
+  input: {
+    email: string;
+    password: string;
+  },
+) {
+  await page.getByLabel("이메일").fill(input.email);
+  await page.getByLabel("비밀번호").fill(input.password);
+}
+
+async function submitPasswordSignin(
+  page: Page,
+  baseURL: string,
+  input: {
+    email: string;
+    password: string;
+  },
+) {
+  await page.goto(`${baseURL}/sign-in`);
+  await fillPasswordSigninForm(page, input);
+  await page.getByRole("button", { name: "대시보드로 이동" }).click();
+}
+
+function getRequiredPasswordAuthDatabaseUrl(name: "DATABASE_URL" | "DATABASE_DIRECT_URL") {
+  const value = process.env[name] ?? readDotEnvLocalValue(name);
+
+  if (!value) {
+    throw new Error(`${name} is required for password auth E2E coverage`);
+  }
+
+  return value;
+}
+
+function readDotEnvLocalValue(name: string): string | null {
+  const envPath = `${process.cwd()}/.env.local`;
+
+  if (!existsSync(envPath)) {
+    return null;
+  }
+
+  const line = readFileSync(envPath, "utf8")
+    .split(/\r?\n/)
+    .find((entry) => entry.startsWith(`${name}=`));
+
+  if (!line) {
+    return null;
+  }
+
+  return line
+    .slice(name.length + 1)
+    .trim()
+    .replace(/^"|"$/g, "");
+}
+
 async function waitForServer(
   baseURL: string,
   server: ChildProcess,
@@ -111,7 +264,7 @@ async function waitForServer(
   while (Date.now() < deadline) {
     if (server.exitCode !== null) {
       throw new Error(
-        `Locked bootstrap server exited early.\n${output.join("").slice(-4000)}`,
+        `Password auth server exited early.\n${output.join("").slice(-4000)}`,
       );
     }
 
@@ -128,7 +281,7 @@ async function waitForServer(
   }
 
   throw new Error(
-    `Timed out waiting for locked bootstrap server.\n${output.join("").slice(-4000)}`,
+    `Timed out waiting for password auth server.\n${output.join("").slice(-4000)}`,
   );
 }
 
@@ -149,35 +302,208 @@ async function stopServer(server: ChildProcess) {
 }
 
 test.describe("Korean consignment operations UI", () => {
-  test("keeps public production bootstrap locked when development sessions are disabled", async ({
+  test("signs up, logs in, and logs out with production password auth", async ({
     browser,
   }, testInfo) => {
-    const lockedServer = await startLockedBootstrapServer(3200 + testInfo.workerIndex);
-    const context = await browser.newContext();
+    const passwordServer = await startPasswordAuthServer(3200 + testInfo.workerIndex);
+    const unique = `${Date.now()}-${testInfo.workerIndex}`;
+    const ipAddress = `password-auth-${unique}`;
+    const email = `playwright-password-${unique}@example.com`;
+    const password = "Safe-password-2026";
+    const context = await browser.newContext({
+      extraHTTPHeaders: {
+        "x-forwarded-for": ipAddress,
+      },
+    });
 
     try {
+      await cleanupPasswordAuthAccount(email);
+      await cleanupPasswordAuthThrottle(ipAddress, [email]);
       const page = await context.newPage();
 
-      await page.goto(`${lockedServer.baseURL}/sign-in`);
+      await page.goto(`${passwordServer.baseURL}/sign-up`);
+      await expect(page.locator('[data-reference="ypY4e"]')).toBeVisible();
+      await fillPasswordSignupForm(page, {
+        email,
+        name: "비밀번호 테스트",
+        tenantName: `Playwright Seller ${unique}`,
+        password,
+      });
+      await page.getByRole("button", { name: "온보딩 시작" }).click();
+
+      await expect(page).toHaveURL(/\/app\/onboarding$/);
+      await expect(page.locator('[data-reference="wxMIN"]')).toBeVisible();
+      await expect(
+        page.getByRole("navigation", { name: "주요 메뉴" }),
+      ).toBeVisible();
+      await page.goto(`${passwordServer.baseURL}/app`);
+      await expect(page.locator('[data-reference="DkLfQ"]')).toBeVisible();
+
+      await page.goto(`${passwordServer.baseURL}/logout`);
+      await expect(page).toHaveURL(/\/sign-in$/);
+      await page.goto(`${passwordServer.baseURL}/app`);
+      await expect(page).toHaveURL(/\/sign-in\?next=%2Fapp$/);
+
       await expect(page.locator('[data-reference="YA9gq"]')).toBeVisible();
       await expect(
         page.getByRole("heading", { name: "운영 워크스페이스에 로그인" }),
       ).toBeVisible();
-      await expect(page.getByText("현재 인증 설정이 완료되지 않았습니다.")).toBeVisible();
-      await expect(page.getByLabel("이메일")).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "대시보드로 이동" })).toHaveCount(0);
+      await expect(page.getByLabel("이메일")).toBeVisible();
+      await expect(page.getByLabel("비밀번호")).toBeVisible();
+      await expect(page.getByRole("button", { name: "대시보드로 이동" })).toBeVisible();
+      await expect(page.getByText("현재 인증 설정이 완료되지 않았습니다.")).toHaveCount(0);
 
-      await page.goto(`${lockedServer.baseURL}/sign-up`);
-      await expect(page.locator('[data-reference="ypY4e"]')).toBeVisible();
-      await expect(page.getByText("현재 인증 설정이 완료되지 않았습니다.")).toBeVisible();
-      await expect(page.getByRole("button", { name: "온보딩 시작" })).toHaveCount(0);
+      await fillPasswordSigninForm(page, {
+        email,
+        password: "Wrong-password-2026",
+      });
+      await page.getByRole("button", { name: "대시보드로 이동" }).click();
+      await expect(
+        page.getByText("이메일 또는 비밀번호가 올바르지 않습니다."),
+      ).toBeVisible();
 
-      await page.goto(`${lockedServer.baseURL}/app`);
+      await fillPasswordSigninForm(page, {
+        email,
+        password,
+      });
+      await page.getByRole("button", { name: "대시보드로 이동" }).click();
+      await expect(page).toHaveURL(/\/app$/);
+      await expect(page.locator('[data-reference="DkLfQ"]')).toBeVisible();
+
+      await page.goto(`${passwordServer.baseURL}/invite/not-real`);
+      await expect(page.getByText("초대 수락은 계정 관리 기능과 함께 열릴 예정입니다.")).toBeVisible();
+      await expect(page.getByRole("button", { name: "초대 수락" })).toHaveCount(0);
+
+      await page.goto(`${passwordServer.baseURL}/logout`);
+      await page.goto(`${passwordServer.baseURL}/app`);
       await expect(page).toHaveURL(/\/sign-in\?next=%2Fapp$/);
-      await expect(page.getByText("현재 인증 설정이 완료되지 않았습니다.")).toBeVisible();
     } finally {
       await context.close();
-      await lockedServer.stop();
+      await passwordServer.stop();
+      await cleanupPasswordAuthAccount(email);
+      await cleanupPasswordAuthThrottle(ipAddress, [email]);
+    }
+  });
+
+  test("limits repeated password signups from one IP before account creation", async ({
+    browser,
+  }, testInfo) => {
+    const passwordServer = await startPasswordAuthServer(3300 + testInfo.workerIndex);
+    const unique = `${Date.now()}-${testInfo.workerIndex}`;
+    const ipAddress = `signup-limit-${unique}`;
+    const emails = Array.from(
+      { length: 6 },
+      (_, index) => `playwright-limit-${unique}-${index}@example.com`,
+    );
+    const context = await browser.newContext({
+      extraHTTPHeaders: {
+        "x-forwarded-for": ipAddress,
+      },
+    });
+
+    try {
+      await cleanupPasswordAuthThrottle(ipAddress, emails);
+      await Promise.all(emails.map((email) => cleanupPasswordAuthAccount(email)));
+      const page = await context.newPage();
+
+      for (const [index, email] of emails.slice(0, 5).entries()) {
+        await submitPasswordSignup(page, passwordServer.baseURL, {
+          email,
+          name: "가입 제한 테스트",
+          tenantName: `Limit Seller ${unique}-${index}`,
+          password: "Safe-password-2026",
+        });
+
+        await expect(page).toHaveURL(/\/app\/onboarding$/);
+        await expect(page.locator('[data-reference="wxMIN"]')).toBeVisible();
+        await page.goto(`${passwordServer.baseURL}/logout`);
+        await expect(page).toHaveURL(/\/sign-in$/);
+      }
+
+      await submitPasswordSignup(page, passwordServer.baseURL, {
+        email: emails[5],
+        name: "가입 제한 테스트",
+        tenantName: `Limit Seller ${unique}-blocked`,
+        password: "Safe-password-2026",
+      });
+
+      await expect(page).toHaveURL(/\/sign-up\?.*error=rate_limited/);
+      await expect(page.locator(".auth-error")).toContainText(
+        "요청이 잠시 제한되었습니다.",
+      );
+      const blockedAccountExists = await passwordAuthAccountExists(emails[5]);
+      expect(blockedAccountExists).toBe(false);
+    } finally {
+      await context.close();
+      await passwordServer.stop();
+      await Promise.all(emails.map((email) => cleanupPasswordAuthAccount(email)));
+      await cleanupPasswordAuthThrottle(ipAddress, emails);
+    }
+  });
+
+  test("keeps the IP-wide sign-in limit after a successful login", async ({
+    browser,
+  }, testInfo) => {
+    const passwordServer = await startPasswordAuthServer(3400 + testInfo.workerIndex);
+    const unique = `${Date.now()}-${testInfo.workerIndex}`;
+    const ipAddress = `signin-limit-${unique}`;
+    const email = `playwright-signin-limit-${unique}@example.com`;
+    const password = "Safe-password-2026";
+    const sprayEmails = Array.from(
+      { length: 9 },
+      (_, index) => `spray-${unique}-${index}@example.com`,
+    );
+    const context = await browser.newContext({
+      extraHTTPHeaders: {
+        "x-forwarded-for": ipAddress,
+      },
+    });
+
+    try {
+      await cleanupPasswordAuthThrottle(ipAddress, [email, ...sprayEmails]);
+      await cleanupPasswordAuthAccount(email);
+      const page = await context.newPage();
+
+      await submitPasswordSignup(page, passwordServer.baseURL, {
+        email,
+        name: "로그인 제한 테스트",
+        tenantName: `Signin Limit Seller ${unique}`,
+        password,
+      });
+      await expect(page).toHaveURL(/\/app\/onboarding$/);
+      await page.goto(`${passwordServer.baseURL}/logout`);
+
+      await submitPasswordSignin(page, passwordServer.baseURL, {
+        email,
+        password,
+      });
+      await expect(page).toHaveURL(/\/app$/);
+      await page.goto(`${passwordServer.baseURL}/logout`);
+
+      for (const sprayEmail of sprayEmails) {
+        await submitPasswordSignin(page, passwordServer.baseURL, {
+          email: sprayEmail,
+          password: "Wrong-password-2026",
+        });
+        await expect(page.locator(".auth-error")).toContainText(
+          "이메일 또는 비밀번호가 올바르지 않습니다.",
+        );
+      }
+
+      await submitPasswordSignin(page, passwordServer.baseURL, {
+        email,
+        password,
+      });
+
+      await expect(page).toHaveURL(/\/sign-in\?.*error=rate_limited/);
+      await expect(page.locator(".auth-error")).toContainText(
+        "요청이 잠시 제한되었습니다.",
+      );
+    } finally {
+      await context.close();
+      await passwordServer.stop();
+      await cleanupPasswordAuthAccount(email);
+      await cleanupPasswordAuthThrottle(ipAddress, [email, ...sprayEmails]);
     }
   });
 

@@ -47,7 +47,7 @@ Existing primitives:
 
 Known gaps:
 
-- SaaS signup/login route scaffold, protected app shell, development session, and tenant schema foundation exist. Production Clerk user/org upsert, billing, and encrypted credential entry are still pending.
+- SaaS signup/login, protected app shell, development session fallback, direct password sessions, and tenant schema foundation exist. Billing, password recovery, account management, and encrypted credential rollout are still pending.
 - Current protected API model supports server session auth plus temporary local/dev `OPERATOR_API_KEY` fallback.
 - Tenant-scoped integration account columns exist, but the full encrypted credential envelope and provider migration are still pending.
 - Dashboard copy is now oriented around order/CS operations.
@@ -216,9 +216,10 @@ Tasks:
 
 Phase 0.5 foundation delivered in the first implementation slice:
 
-- Clerk selected and installed.
-- `AUTH_PROVIDER_MODE=development|clerk` added.
+- First-party password auth selected and implemented.
+- `AUTH_PROVIDER_MODE=development|password` added.
 - Development sessions are HTTP-only cookies and blocked in production preflight.
+- Production sessions use DB-backed `auth_sessions` rows with hashed bearer tokens.
 - `/app` is protected server-side and `/` is public.
 - `/sign-up`, `/sign-in`, `/session-recovery`, `/invite/[token]`, and `/logout` exist.
 - `users`, `tenants`, `memberships`, `invitations`, and tenant-scoped `integration_accounts` schema exist.
@@ -715,7 +716,7 @@ Official references checked for the SaaS planning update:
 
 - Next.js Authentication guide: `https://nextjs.org/docs/app/guides/authentication`
 - Vercel Sign in with Vercel guide: `https://vercel.com/docs/sign-in-with-vercel/getting-started`
-- Clerk Next.js App Router auth reference: `https://clerk.com/docs/reference/nextjs/app-router/auth`
+- Next.js Server Actions and cookie mutation docs checked from the installed Next.js docs.
 
 Use current official docs again before implementing auth because provider APIs and Next.js route conventions can change.
 

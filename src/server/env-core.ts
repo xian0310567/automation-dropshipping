@@ -14,13 +14,11 @@ const envSchema = z.object({
   OPERATOR_ROLE: z
     .enum(["owner", "admin", "operator", "viewer"])
     .default("owner"),
-  AUTH_PROVIDER_MODE: z.enum(["development", "clerk"]).default("development"),
+  AUTH_PROVIDER_MODE: z.enum(["development", "password"]).default("development"),
   AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION: z
     .enum(["true", "false"])
     .default("false"),
   E2E_TEST_MODE: z.enum(["true", "false"]).default("false"),
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().optional(),
-  CLERK_SECRET_KEY: z.string().optional(),
   APP_BASE_URL: z.string().url().optional(),
   COUPANG_VENDOR_ID: z.string().optional(),
   COUPANG_ACCESS_KEY: z.string().optional(),
@@ -96,11 +94,6 @@ export function assertProductionEnv(env = getServerEnv()): void {
 
     return;
   }
-
-  assertRequiredEnv(env, [
-    "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
-    "CLERK_SECRET_KEY",
-  ]);
 
   if (env.AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION === "true") {
     throw new Error("Development auth sessions are not allowed in production");

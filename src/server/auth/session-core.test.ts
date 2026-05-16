@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDevelopmentSession,
-  getClerkReadiness,
   isDevelopmentSessionEnabled,
-  mapClerkOrganizationRole,
   normalizeNextPath,
   parseDevelopmentSessionCookie,
+  resolveAuthMode,
   serializeDevelopmentSession,
 } from "./session-core";
 
@@ -59,17 +58,8 @@ describe("session core", () => {
     expect(normalizeNextPath("/app/onboarding")).toBe("/app/onboarding");
   });
 
-  it("reports missing Clerk production keys", () => {
-    expect(getClerkReadiness({ CLERK_SECRET_KEY: "sk_test" })).toEqual({
-      ok: false,
-      missing: ["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"],
-    });
-  });
-
-  it("fails closed for unknown Clerk organization roles", () => {
-    expect(mapClerkOrganizationRole("org:admin")).toBe("admin");
-    expect(mapClerkOrganizationRole("org:member")).toBe("operator");
-    expect(mapClerkOrganizationRole(null)).toBeNull();
-    expect(mapClerkOrganizationRole("unexpected")).toBeNull();
+  it("resolves password auth as the production mode", () => {
+    expect(resolveAuthMode({ AUTH_PROVIDER_MODE: "password" })).toBe("password");
+    expect(resolveAuthMode({ AUTH_PROVIDER_MODE: "clerk" })).toBe("development");
   });
 });

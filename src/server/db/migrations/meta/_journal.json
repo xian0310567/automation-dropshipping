@@ -22,6 +22,20 @@
       "when": 1778803939089,
       "tag": "0002_wild_stardust",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1778904157607,
+      "tag": "0003_tearful_skrulls",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1778904815351,
+      "tag": "0004_wealthy_arclight",
+      "breakpoints": true
     }
   ]
 }

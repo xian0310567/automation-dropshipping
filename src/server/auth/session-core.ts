@@ -4,7 +4,7 @@ import type { ActorRole } from "@/server/rbac/policy";
 
 export const DEVELOPMENT_SESSION_COOKIE = "oc_dev_session";
 
-export type AuthProviderMode = "development" | "clerk";
+export type AuthProviderMode = "development" | "password";
 
 export type AuthenticatedSession = {
   authProvider: AuthProviderMode;
@@ -24,14 +24,12 @@ type AuthEnv = {
   VERCEL_ENV?: string;
   AUTH_PROVIDER_MODE?: string;
   AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION?: string;
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?: string;
-  CLERK_SECRET_KEY?: string;
 };
 
 const actorRoleSchema = z.enum(["owner", "admin", "operator", "viewer"]);
 
 const sessionSchema = z.object({
-  authProvider: z.enum(["development", "clerk"]),
+  authProvider: z.enum(["development", "password"]),
   authSubjectId: z.string().min(1),
   userId: z.string().min(1),
   email: z.string().email(),
@@ -44,7 +42,7 @@ const sessionSchema = z.object({
 });
 
 export function resolveAuthMode(env: AuthEnv): AuthProviderMode {
-  return env.AUTH_PROVIDER_MODE === "clerk" ? "clerk" : "development";
+  return env.AUTH_PROVIDER_MODE === "password" ? "password" : "development";
 }
 
 export function isDevelopmentSessionEnabled(env: AuthEnv): boolean {
@@ -54,28 +52,6 @@ export function isDevelopmentSessionEnabled(env: AuthEnv): boolean {
       (env.AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION === "true" &&
         env.VERCEL_ENV !== "production"))
   );
-}
-
-export function getClerkReadiness(env: AuthEnv): {
-  ok: boolean;
-  missing: string[];
-} {
-  const missing = [
-    [
-      "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
-      env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
-    ],
-    ["CLERK_SECRET_KEY", env.CLERK_SECRET_KEY],
-  ] as const;
-
-  const missingKeys = missing
-    .filter(([, value]) => !value)
-    .map(([key]) => key);
-
-  return {
-    ok: missingKeys.length === 0,
-    missing: [...missingKeys],
-  };
 }
 
 export function buildDevelopmentSession(input: {
@@ -140,28 +116,6 @@ export function normalizeNextPath(
   }
 
   return value;
-}
-
-export function mapClerkOrganizationRole(
-  role: string | null | undefined,
-): ActorRole | null {
-  if (role === "org:owner" || role === "owner") {
-    return "owner";
-  }
-
-  if (role === "org:admin" || role === "admin") {
-    return "admin";
-  }
-
-  if (role === "org:member" || role === "operator") {
-    return "operator";
-  }
-
-  if (role === "viewer") {
-    return "viewer";
-  }
-
-  return null;
 }
 
 export function buildStableScopedUuid(scope: string, value: string): string {

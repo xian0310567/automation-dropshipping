@@ -1,33 +1,79 @@
-import { SignUp } from "@clerk/nextjs";
 import Link from "next/link";
 import { getServerEnv } from "@/server/env";
 import {
-  getClerkReadiness,
   isDevelopmentSessionEnabled,
   resolveAuthMode,
 } from "@/server/auth/session-core";
-import { startDevelopmentSignup } from "../auth-actions";
+import { signUpWithPassword, startDevelopmentSignup } from "../auth-actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function SignUpPage() {
+type SignUpPageProps = {
+  searchParams: Promise<{
+    error?: string;
+  }>;
+};
+
+export default async function SignUpPage({ searchParams }: SignUpPageProps) {
+  const params = await searchParams;
   const env = getServerEnv();
-  const clerkReady = getClerkReadiness(env).ok;
+  const authMode = resolveAuthMode(env);
+  const errorMessage = getAuthErrorMessage(params.error);
 
   return (
     <main className="auth-screen signup-screen" data-reference="ypY4e">
       <section className="signup-form-card" aria-label="워크스페이스 시작">
         <h1>워크스페이스 시작</h1>
         <p>대표 운영자가 판매자 워크스페이스를 만들고, 팀원을 초대해 역할별 권한으로 주문·CS 업무를 나눕니다.</p>
-        {resolveAuthMode(env) === "clerk" && clerkReady ? (
-          <div className="auth-clerk">
-            <SignUp
-              fallbackRedirectUrl="/app/onboarding"
-              path="/sign-up"
-              routing="path"
-              signInUrl="/sign-in"
-            />
-          </div>
+        {authMode === "password" ? (
+          <form action={signUpWithPassword} className="auth-form">
+            <input name="next" type="hidden" value="/app/onboarding" />
+            {errorMessage ? (
+              <p className="auth-error" role="alert">
+                {errorMessage}
+              </p>
+            ) : null}
+            <label>
+              이메일
+              <input
+                autoComplete="email"
+                name="email"
+                placeholder="owner@example.com"
+                required
+                type="email"
+              />
+            </label>
+            <label>
+              이름
+              <input
+                autoComplete="name"
+                name="name"
+                placeholder="대표 운영자"
+                required
+              />
+            </label>
+            <label>
+              워크스페이스 이름
+              <input
+                autoComplete="organization"
+                name="tenantName"
+                placeholder="내 스토어"
+                required
+              />
+            </label>
+            <label>
+              비밀번호
+              <input
+                autoComplete="new-password"
+                minLength={10}
+                name="password"
+                placeholder="영문과 숫자 포함 10자 이상"
+                required
+                type="password"
+              />
+            </label>
+            <button type="submit">온보딩 시작</button>
+          </form>
         ) : isDevelopmentSessionEnabled(env) ? (
           <form action={startDevelopmentSignup} className="auth-form">
             <input name="next" type="hidden" value="/app/onboarding" />
@@ -78,4 +124,28 @@ export default async function SignUpPage() {
       </aside>
     </main>
   );
+}
+
+function getAuthErrorMessage(error: string | undefined): string | null {
+  if (error === "invalid_email") {
+    return "사용 가능한 이메일을 입력해주세요.";
+  }
+
+  if (error === "weak_password") {
+    return "비밀번호는 10자 이상이며 영문자와 숫자를 모두 포함해야 합니다.";
+  }
+
+  if (error === "email_taken") {
+    return "이미 가입된 이메일입니다. 로그인해주세요.";
+  }
+
+  if (error === "invalid_workspace") {
+    return "워크스페이스 이름을 입력해주세요.";
+  }
+
+  if (error === "rate_limited") {
+    return "요청이 잠시 제한되었습니다. 잠시 후 다시 시도해주세요.";
+  }
+
+  return null;
 }

@@ -39,14 +39,12 @@ pnpm dlx vercel@latest env ls production
 - `BLOB_READ_WRITE_TOKEN`
 - `PII_ENCRYPTION_KEY`
 
-사용자가 로그인할 수 있는 공개 SaaS 운영 전에는 아래 Clerk 값도 필요하다.
+사용자가 로그인할 수 있는 공개 SaaS 운영은 자체 이메일/비밀번호 인증으로 동작한다.
 
-- `AUTH_PROVIDER_MODE=clerk`
+- `AUTH_PROVIDER_MODE=password`
 - `AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION=false`
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
-- `CLERK_SECRET_KEY`
 
-현재 pre-public Vercel 검증은 실제 Clerk 프로젝트가 없으므로 Production URL에는 개발용 로그인을 열지 않는다. Production은 아래처럼 잠긴 bootstrap 상태로 둘 수 있다.
+잠긴 bootstrap 검증이 필요할 때만 Production을 아래처럼 둘 수 있다. 이 상태에서는 공개 로그인/가입이 닫히므로 실제 사용 가능한 서비스 상태가 아니다.
 
 - `AUTH_PROVIDER_MODE=development`
 - `AUTH_ALLOW_DEV_SESSION_IN_PRODUCTION=false`

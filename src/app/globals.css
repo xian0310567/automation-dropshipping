@@ -1175,6 +1175,18 @@ input:focus-visible {
   font-weight: 760;
 }
 
+.auth-error {
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--destructive) 24%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--destructive) 8%, white);
+  color: var(--destructive);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+  padding: 10px 12px;
+}
+
 .auth-note,
 .auth-muted {
   margin: 16px 0 0;
@@ -1187,10 +1199,6 @@ input:focus-visible {
 .signup-steps-card a {
   color: var(--primary);
   font-weight: 760;
-}
-
-.auth-clerk {
-  margin-top: 16px;
 }
 
 .signup-screen {

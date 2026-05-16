@@ -1,18 +1,17 @@
-import { SignIn } from "@clerk/nextjs";
 import Link from "next/link";
 import { getServerEnv } from "@/server/env";
 import {
-  getClerkReadiness,
   isDevelopmentSessionEnabled,
   normalizeNextPath,
   resolveAuthMode,
 } from "@/server/auth/session-core";
-import { startDevelopmentSession } from "../auth-actions";
+import { signInWithPassword, startDevelopmentSession } from "../auth-actions";
 
 export const dynamic = "force-dynamic";
 
 type SignInPageProps = {
   searchParams: Promise<{
+    error?: string;
     next?: string;
   }>;
 };
@@ -21,7 +20,8 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const params = await searchParams;
   const next = normalizeNextPath(params.next);
   const env = getServerEnv();
-  const clerkReady = getClerkReadiness(env).ok;
+  const authMode = resolveAuthMode(env);
+  const errorMessage = getAuthErrorMessage(params.error);
 
   return (
     <main className="auth-screen" data-reference="YA9gq">
@@ -52,15 +52,36 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
       <section className="auth-form-card" aria-label="로그인">
         <h2>운영 워크스페이스에 로그인</h2>
         <p>작업자 계정과 워크스페이스를 확인한 뒤 보호된 대시보드로 이동합니다.</p>
-        {resolveAuthMode(env) === "clerk" && clerkReady ? (
-          <div className="auth-clerk">
-            <SignIn
-              fallbackRedirectUrl={next}
-              path="/sign-in"
-              routing="path"
-              signUpUrl="/sign-up"
-            />
-          </div>
+        {authMode === "password" ? (
+          <form action={signInWithPassword} className="auth-form">
+            <input name="next" type="hidden" value={next} />
+            {errorMessage ? (
+              <p className="auth-error" role="alert">
+                {errorMessage}
+              </p>
+            ) : null}
+            <label>
+              이메일
+              <input
+                autoComplete="email"
+                name="email"
+                placeholder="owner@example.com"
+                required
+                type="email"
+              />
+            </label>
+            <label>
+              비밀번호
+              <input
+                autoComplete="current-password"
+                name="password"
+                placeholder="비밀번호"
+                required
+                type="password"
+              />
+            </label>
+            <button type="submit">대시보드로 이동</button>
+          </form>
         ) : isDevelopmentSessionEnabled(env) ? (
           <form action={startDevelopmentSession} className="auth-form">
             <input name="next" type="hidden" value={next} />
@@ -86,4 +107,20 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
       </section>
     </main>
   );
+}
+
+function getAuthErrorMessage(error: string | undefined): string | null {
+  if (error === "invalid_credentials") {
+    return "이메일 또는 비밀번호가 올바르지 않습니다.";
+  }
+
+  if (error === "auth_not_configured") {
+    return "현재 인증 설정이 완료되지 않았습니다.";
+  }
+
+  if (error === "rate_limited") {
+    return "요청이 잠시 제한되었습니다. 잠시 후 다시 시도해주세요.";
+  }
+
+  return null;
 }

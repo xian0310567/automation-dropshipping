@@ -1,24 +1,29 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { createDb } from "@/server/db/client";
 import { getServerEnv } from "@/server/env";
 import {
   DEVELOPMENT_SESSION_COOKIE,
   type AuthenticatedSession,
-  buildStableScopedUuid,
-  getClerkReadiness,
   isDevelopmentSessionEnabled,
-  mapClerkOrganizationRole,
   normalizeNextPath,
   parseDevelopmentSessionCookie,
   resolveAuthMode,
   serializeDevelopmentSession,
 } from "./session-core";
+import {
+  PASSWORD_SESSION_COOKIE,
+  getPasswordSessionFromToken,
+  revokePasswordSession,
+} from "./password-store";
 
 export async function getCurrentAuthSession(): Promise<AuthenticatedSession | null> {
   const env = getServerEnv();
 
-  if (resolveAuthMode(env) === "development") {
+  const authMode = resolveAuthMode(env);
+
+  if (authMode === "development") {
     if (!isDevelopmentSessionEnabled(env)) {
       return null;
     }
@@ -29,7 +34,14 @@ export async function getCurrentAuthSession(): Promise<AuthenticatedSession | nu
     );
   }
 
-  return getClerkAuthSession(env);
+  const cookieStore = await cookies();
+  const passwordToken = cookieStore.get(PASSWORD_SESSION_COOKIE)?.value;
+
+  if (!passwordToken) {
+    return null;
+  }
+
+  return getPasswordSessionFromToken(createDb(), passwordToken);
 }
 
 export async function requireAuthSession(
@@ -57,57 +69,39 @@ export async function setDevelopmentSessionCookie(
   });
 }
 
+export async function setPasswordSessionCookie(input: {
+  token: string;
+  expiresAt: Date;
+}): Promise<void> {
+  const cookieStore = await cookies();
+  const maxAge = Math.max(
+    0,
+    Math.floor((input.expiresAt.getTime() - Date.now()) / 1000),
+  );
+
+  cookieStore.set(PASSWORD_SESSION_COOKIE, input.token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge,
+  });
+}
+
 export async function clearDevelopmentSessionCookie(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete(DEVELOPMENT_SESSION_COOKIE);
 }
 
-async function getClerkAuthSession(env: ReturnType<typeof getServerEnv>) {
-  const readiness = getClerkReadiness(env);
+export async function clearAuthSessionCookie(): Promise<void> {
+  const env = getServerEnv();
+  const cookieStore = await cookies();
+  const passwordToken = cookieStore.get(PASSWORD_SESSION_COOKIE)?.value;
 
-  if (!readiness.ok) {
-    return null;
+  if (resolveAuthMode(env) === "password" && passwordToken) {
+    await revokePasswordSession(createDb(), passwordToken);
   }
 
-  const { auth, currentUser } = await import("@clerk/nextjs/server");
-  const authState = await auth();
-
-  if (!authState.isAuthenticated || !authState.userId) {
-    return null;
-  }
-
-  const user = await currentUser().catch(() => null);
-  const email =
-    user?.primaryEmailAddress?.emailAddress ??
-    user?.emailAddresses.at(0)?.emailAddress ??
-    `${authState.userId}@clerk.local`;
-  const name =
-    [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
-    user?.username ||
-    email;
-  if (!authState.orgId) {
-    return null;
-  }
-
-  const membershipRole = mapClerkOrganizationRole(authState.orgRole);
-
-  if (!membershipRole) {
-    return null;
-  }
-
-  const tenantId = buildStableScopedUuid("clerk-tenant", authState.orgId);
-  const tenantSlug = authState.orgSlug ?? authState.orgId;
-
-  return {
-    authProvider: "clerk" as const,
-    authSubjectId: authState.userId,
-    userId: buildStableScopedUuid("clerk-user", authState.userId),
-    email,
-    name,
-    tenantId,
-    tenantName: authState.orgSlug ?? authState.orgId,
-    tenantSlug,
-    membershipRole,
-    issuedAt: new Date().toISOString(),
-  };
+  cookieStore.delete(PASSWORD_SESSION_COOKIE);
+  cookieStore.delete(DEVELOPMENT_SESSION_COOKIE);
 }
