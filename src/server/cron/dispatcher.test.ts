@@ -3,6 +3,9 @@ import {
   asCheckpoint,
   dispatchCronOnce,
   JOB_CLAIM_SQL,
+  markJobFailed,
+  markJobFinished,
+  runRegisteredJob,
 } from "./dispatcher";
 
 describe("dispatchCronOnce", () => {
@@ -98,6 +101,93 @@ describe("dispatchCronOnce", () => {
 
     expect(result).toMatchObject({ status: "succeeded" });
   });
+
+  it("runs Coupang collection jobs through the registered job handler", async () => {
+    await expect(
+      runRegisteredJob({
+        id: "job-coupang-orders",
+        tenantId: "tenant-1",
+        type: "coupang.orders.collection.prepare",
+        checkpoint: {
+          provider: "coupang",
+          syncKind: "orders",
+          stage: "queued",
+          cursor: null,
+        },
+        leaseOwner: "cron-test",
+      }),
+    ).resolves.toMatchObject({
+      status: "succeeded",
+      processedCount: 0,
+      checkpoint: {
+        provider: "coupang",
+        syncKind: "orders",
+        stage: "ready_for_collection",
+      },
+    });
+  });
+
+  it("does not record finished-run evidence when the lease transition is stale", async () => {
+    const executed: unknown[] = [];
+    const db = {
+      transaction: async (
+        callback: (tx: { execute: (query: unknown) => Promise<{ rows: unknown[] }> }) => Promise<void>,
+      ) =>
+        callback({
+          execute: async (query: unknown) => {
+            executed.push(query);
+            return { rows: [] };
+          },
+        }),
+    };
+
+    await expect(
+      markJobFinished(
+        db as never,
+        {
+          id: "job-1",
+          type: "retention.cleanup",
+          checkpoint: {},
+          leaseOwner: "stale-worker",
+        },
+        {
+          status: "succeeded",
+          checkpoint: {},
+          processedCount: 0,
+        },
+      ),
+    ).rejects.toThrow(/lease is no longer owned/i);
+    expect(executed).toHaveLength(1);
+  });
+
+  it("does not record failed-run evidence when the lease transition is stale", async () => {
+    const executed: unknown[] = [];
+    const db = {
+      transaction: async (
+        callback: (tx: { execute: (query: unknown) => Promise<{ rows: unknown[] }> }) => Promise<void>,
+      ) =>
+        callback({
+          execute: async (query: unknown) => {
+            executed.push(query);
+            return { rows: [] };
+          },
+        }),
+    };
+
+    await expect(
+      markJobFailed(
+        db as never,
+        {
+          id: "job-1",
+          type: "retention.cleanup",
+          checkpoint: {},
+          leaseOwner: "stale-worker",
+        },
+        new Error("boom"),
+      ),
+    ).rejects.toThrow(/lease is no longer owned/i);
+    expect(executed).toHaveLength(1);
+  });
 });
 
 describe("asCheckpoint", () => {
@@ -111,5 +201,7 @@ describe("JOB_CLAIM_SQL", () => {
     expect(JOB_CLAIM_SQL).toContain("status IN ('queued', 'retrying')");
     expect(JOB_CLAIM_SQL).toContain("status = 'leased'");
     expect(JOB_CLAIM_SQL).toContain("lease_expires_at < now()");
+    expect(JOB_CLAIM_SQL).toContain("jobs.tenant_id");
+    expect(JOB_CLAIM_SQL).toContain("jobs.attempts");
   });
 });

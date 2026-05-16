@@ -223,6 +223,11 @@ async function cleanupPasswordAuthAccount(email: string) {
     await sql`delete from memberships where user_id = ${user.id}`;
 
     for (const tenant of tenantRows) {
+      await sql`delete from dead_letters where tenant_id = ${tenant.tenant_id}`;
+      await sql`delete from job_runs where tenant_id = ${tenant.tenant_id}`;
+      await sql`delete from jobs where tenant_id = ${tenant.tenant_id}`;
+      await sql`delete from audit_logs where tenant_id = ${tenant.tenant_id}`;
+      await sql`delete from integration_accounts where tenant_id = ${tenant.tenant_id}`;
       await sql`delete from tenants where id = ${tenant.tenant_id}`;
     }
 
@@ -237,6 +242,24 @@ async function passwordAuthAccountExists(email: string) {
   `) as { id: string }[];
 
   return rows.length > 0;
+}
+
+async function getCoupangJobsForPasswordAuthAccount(email: string) {
+  const sql = neon(getRequiredPasswordAuthDatabaseUrl("DATABASE_URL"));
+
+  return (await sql`
+    select jobs.type, jobs.status
+    from users
+    join memberships on memberships.user_id = users.id
+    join jobs on jobs.tenant_id = memberships.tenant_id
+    where users.email = ${email}
+      and jobs.type in (
+        'coupang.orders.collection.prepare',
+        'coupang.products.collection.prepare',
+        'coupang.cs.collection.prepare'
+      )
+    order by jobs.type asc
+  `) as { type: string; status: string }[];
 }
 
 async function cleanupPasswordAuthThrottle(
@@ -610,6 +633,78 @@ test.describe("Korean consignment operations UI", () => {
     }
   });
 
+  test("schedules real Coupang sync jobs through password auth storage", async ({
+    browser,
+  }, testInfo) => {
+    const passwordServer = await startPasswordAuthServer(3500 + testInfo.workerIndex);
+    const unique = `${Date.now()}-${testInfo.workerIndex}`;
+    const ipAddress = `coupang-db-${unique}`;
+    const email = `playwright-coupang-db-${unique}@example.com`;
+    const password = "Safe-password-2026";
+    const context = await browser.newContext({
+      extraHTTPHeaders: {
+        "x-forwarded-for": ipAddress,
+      },
+    });
+
+    try {
+      await cleanupPasswordAuthThrottle(ipAddress, [email]);
+      await cleanupPasswordAuthAccount(email);
+      const page = await context.newPage();
+
+      await submitPasswordSignup(page, passwordServer.baseURL, {
+        email,
+        name: "쿠팡 DB 테스트",
+        tenantName: `Coupang DB Seller ${unique}`,
+        password,
+      });
+      await expect(page).toHaveURL(/\/app\/onboarding$/);
+      await page.goto(`${passwordServer.baseURL}/app/integrations`);
+
+      const integrations = page.locator('[data-reference="jnl9R"]');
+      await integrations.getByLabel("판매자 ID").fill("A00123456");
+      await integrations.getByLabel("연동 이름").fill("본점 쿠팡");
+      await integrations.getByLabel("Access Key").fill("coupang-access-key");
+      await integrations.getByLabel("Secret Key").fill("coupang-secret-key");
+      await integrations.getByRole("button", { name: "쿠팡 연결 저장" }).click();
+
+      await expect(integrations.getByRole("status")).toContainText(
+        "쿠팡 연동 정보를 안전하게 저장했습니다.",
+      );
+      await page.reload();
+      await expect(integrations.getByText("3개 작업이 대기 중입니다.")).toBeVisible();
+
+      expect(await getCoupangJobsForPasswordAuthAccount(email)).toEqual([
+        { type: "coupang.cs.collection.prepare", status: "queued" },
+        { type: "coupang.orders.collection.prepare", status: "queued" },
+        { type: "coupang.products.collection.prepare", status: "queued" },
+      ]);
+
+      await integrations.getByRole("button", { name: "쿠팡 연결 해제" }).click();
+      await expect
+        .poll(() => getCoupangJobsForPasswordAuthAccount(email))
+        .toEqual([
+          { type: "coupang.cs.collection.prepare", status: "cancelled" },
+          { type: "coupang.orders.collection.prepare", status: "cancelled" },
+          { type: "coupang.products.collection.prepare", status: "cancelled" },
+        ]);
+
+      await page.reload();
+      await expect(integrations.getByText("쿠팡을 연결하면 시작됩니다.")).toBeVisible();
+      await expect(integrations.getByText("3개 작업이 대기 중입니다.")).toHaveCount(0);
+      expect(await getCoupangJobsForPasswordAuthAccount(email)).toEqual([
+        { type: "coupang.cs.collection.prepare", status: "cancelled" },
+        { type: "coupang.orders.collection.prepare", status: "cancelled" },
+        { type: "coupang.products.collection.prepare", status: "cancelled" },
+      ]);
+    } finally {
+      await context.close();
+      await passwordServer.stop();
+      await cleanupPasswordAuthAccount(email);
+      await cleanupPasswordAuthThrottle(ipAddress, [email]);
+    }
+  });
+
   test("redirects unauthenticated users to the designed sign-in surface", async ({
     page,
   }) => {
@@ -850,6 +945,13 @@ test.describe("Korean consignment operations UI", () => {
     await expect(integrations.getByText("연결됨").first()).toBeVisible();
     await expect(integrations.getByText("A00****56")).toBeVisible();
     await expect(integrations.getByLabel("Secret Key")).toHaveValue("");
+    await expect(
+      integrations.getByRole("heading", { name: "동기화 작업" }),
+    ).toBeVisible();
+    await expect(integrations.getByText("3개 작업이 대기 중입니다.")).toBeVisible();
+    await expect(integrations.getByText("주문 수집", { exact: true })).toBeVisible();
+    await expect(integrations.getByText("상품 확인", { exact: true })).toBeVisible();
+    await expect(integrations.getByText("문의 확인", { exact: true })).toBeVisible();
 
     await integrations.getByRole("button", { name: "쿠팡 연결 해제" }).click();
     await page.reload();

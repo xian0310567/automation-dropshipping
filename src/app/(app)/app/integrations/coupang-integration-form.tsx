@@ -7,6 +7,7 @@ import {
   Loader2,
   PlugZap,
   ShieldCheck,
+  Sparkles,
   Unplug,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -21,6 +22,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import type { CoupangSyncJobSummary } from "@/server/coupang/sync-jobs";
 import type { CoupangIntegrationSummary } from "@/server/integrations/coupang-credentials";
 import type { CoupangIntegrationFormState } from "./actions";
 import {
@@ -36,6 +38,7 @@ const cardMotion = {
 
 type CoupangIntegrationFormProps = {
   summary: CoupangIntegrationSummary;
+  syncSummary: CoupangSyncJobSummary;
 };
 
 type FieldProps = {
@@ -51,7 +54,10 @@ const initialCoupangIntegrationFormState: CoupangIntegrationFormState = {
   fieldErrors: {},
 };
 
-export function CoupangIntegrationForm({ summary }: CoupangIntegrationFormProps) {
+export function CoupangIntegrationForm({
+  summary,
+  syncSummary,
+}: CoupangIntegrationFormProps) {
   const [state, formAction, isPending] = useActionState(
     saveCoupangIntegrationAction,
     initialCoupangIntegrationFormState,
@@ -169,6 +175,8 @@ export function CoupangIntegrationForm({ summary }: CoupangIntegrationFormProps)
               현재는 쿠팡만 연결합니다. 네이버 스마트스토어는 다음 연동 단계에서 같은 방식으로 추가합니다.
             </div>
 
+            <CoupangSyncStatus summary={syncSummary} />
+
             {!summary.canManage ? (
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
                 연동 변경은 소유자 또는 관리자만 할 수 있습니다.
@@ -186,6 +194,62 @@ export function CoupangIntegrationForm({ summary }: CoupangIntegrationFormProps)
       </motion.aside>
     </section>
   );
+}
+
+function CoupangSyncStatus({ summary }: { summary: CoupangSyncJobSummary }) {
+  return (
+    <div className="grid gap-3 rounded-lg border bg-muted/30 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="grid gap-1">
+          <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold">
+            <Sparkles className="size-4 text-teal-700" aria-hidden="true" />
+            동기화 작업
+          </h3>
+          <p className="text-xs text-muted-foreground">{summary.headline}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-2">
+        {summary.items.map((item) => (
+          <div
+            className="flex items-center justify-between gap-3 text-sm"
+            key={item.type}
+          >
+            <span className="text-muted-foreground">{item.label}</span>
+            <span className={getSyncStatusClassName(item.tone)}>
+              {item.statusLabel}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {summary.latestIssue ? (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-950">
+          {summary.latestIssue}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function getSyncStatusClassName(
+  tone: CoupangSyncJobSummary["items"][number]["tone"],
+): string {
+  const base = "rounded-full px-2 py-0.5 text-xs font-semibold";
+
+  if (tone === "success") {
+    return `${base} bg-emerald-50 text-emerald-700`;
+  }
+
+  if (tone === "warning") {
+    return `${base} bg-amber-50 text-amber-800`;
+  }
+
+  if (tone === "danger") {
+    return `${base} bg-red-50 text-red-700`;
+  }
+
+  return `${base} bg-background text-muted-foreground`;
 }
 
 function Field({ error, label, name, type = "text", ...props }: FieldProps) {

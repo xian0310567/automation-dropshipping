@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { ensureLocalIdentityForSession } from "@/server/auth/local-identity";
 import { requireAuthSession } from "@/server/auth/session";
+import {
+  cancelCoupangSyncJobs,
+  scheduleCoupangInitialSyncJobs,
+} from "@/server/coupang/sync-jobs";
 import { createDb } from "@/server/db/client";
 import { auditLogs } from "@/server/db/schema";
 import { getServerEnv } from "@/server/env";
@@ -91,6 +95,10 @@ export async function saveCoupangIntegrationAction(
       credentials: parsed.data,
       env,
     });
+    await scheduleCoupangInitialSyncJobs({
+      db,
+      context: localContext,
+    });
 
     await db.insert(auditLogs).values({
       eventType: "integration.coupang.connected",
@@ -145,6 +153,10 @@ export async function disconnectCoupangIntegrationAction(): Promise<void> {
   });
 
   await disconnectCoupangIntegration({
+    db,
+    context: localContext,
+  });
+  await cancelCoupangSyncJobs({
     db,
     context: localContext,
   });

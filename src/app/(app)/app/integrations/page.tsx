@@ -1,5 +1,10 @@
 import { ensureLocalIdentityForSession } from "@/server/auth/local-identity";
 import { requireAuthSession } from "@/server/auth/session";
+import {
+  getCoupangSyncJobSummary,
+  summarizeCoupangSyncJobs,
+  type CoupangSyncJobSummary,
+} from "@/server/coupang/sync-jobs";
 import type { AuthenticatedSession } from "@/server/auth/session-core";
 import { createDb } from "@/server/db/client";
 import { getServerEnv } from "@/server/env";
@@ -16,7 +21,7 @@ export const dynamic = "force-dynamic";
 
 export default async function IntegrationsPage() {
   const session = await requireAuthSession("/app/integrations");
-  const summary = await loadCoupangSummary(session);
+  const data = await loadCoupangIntegrationData(session);
 
   return (
     <section
@@ -35,33 +40,91 @@ export default async function IntegrationsPage() {
         </div>
       </header>
 
-      <CoupangIntegrationForm summary={summary} />
+      <CoupangIntegrationForm
+        summary={data.summary}
+        syncSummary={data.syncSummary}
+      />
     </section>
   );
 }
 
-async function loadCoupangSummary(
+type CoupangIntegrationPageData = {
+  summary: CoupangIntegrationSummary;
+  syncSummary: CoupangSyncJobSummary;
+};
+
+async function loadCoupangIntegrationData(
   session: AuthenticatedSession,
-): Promise<CoupangIntegrationSummary> {
+): Promise<CoupangIntegrationPageData> {
   const env = getServerEnv();
   const context = buildTenantContext(session);
 
   if (env.E2E_TEST_MODE === "true") {
-    return getE2eCoupangIntegrationSummary(context);
+    const summary = getE2eCoupangIntegrationSummary(context);
+
+    return {
+      summary,
+      syncSummary: summarizeCoupangSyncJobs(
+        summary.status === "connected"
+          ? [
+              {
+                type: "coupang.orders.collection.prepare",
+                status: "queued",
+                lastError: null,
+                updatedAt: summary.credentialLastRotatedAt
+                  ? new Date(summary.credentialLastRotatedAt)
+                  : new Date(),
+              },
+              {
+                type: "coupang.products.collection.prepare",
+                status: "queued",
+                lastError: null,
+                updatedAt: summary.credentialLastRotatedAt
+                  ? new Date(summary.credentialLastRotatedAt)
+                  : new Date(),
+              },
+              {
+                type: "coupang.cs.collection.prepare",
+                status: "queued",
+                lastError: null,
+                updatedAt: summary.credentialLastRotatedAt
+                  ? new Date(summary.credentialLastRotatedAt)
+                  : new Date(),
+              },
+            ]
+          : [],
+      ),
+    };
   }
 
   if (!env.DATABASE_URL) {
-    return buildDefaultCoupangSummary({
-      context,
-      storageAvailable: false,
-    });
+    return {
+      summary: buildDefaultCoupangSummary({
+        context,
+        storageAvailable: false,
+      }),
+      syncSummary: summarizeCoupangSyncJobs([]),
+    };
   }
 
   const db = createDb();
   const localSession = await ensureLocalIdentityForSession(db, session);
+  const localContext = buildTenantContext(localSession);
 
-  return getCoupangIntegrationSummary({
+  const summary = await getCoupangIntegrationSummary({
     db,
-    context: buildTenantContext(localSession),
+    context: localContext,
   });
+  const syncSummary =
+    summary.status === "connected"
+      ? await getCoupangSyncJobSummary({
+          db,
+          context: localContext,
+        })
+      : summarizeCoupangSyncJobs([]);
+
+  return {
+    summary,
+    syncSummary,
+  };
 }

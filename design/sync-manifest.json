@@ -1,12 +1,13 @@
 {
-  "updatedAt": "2026-05-16T06:13:41Z",
+  "updatedAt": "2026-05-16T07:18:00Z",
   "penFile": "design/coupang-ownerclan-ops.pen",
   "exportDir": "design/exports/qa-20260516T061341Z",
   "scale": 2,
   "notes": [
     "가입 화면은 직접 구현한 비밀번호 계정 흐름을 기준으로 역할 선택 카드 대신 비밀번호 필드를 사용한다.",
     "앱 전역 토큰은 pen 변수의 bg, surface, border, teal, text-primary, text-secondary 값을 기준으로 맞춘다.",
-    "모바일 오늘 처리 화면은 데스크톱 DkLfQ 대신 GlQOZ 프레임을 기준으로 검증한다."
+    "모바일 오늘 처리 화면은 데스크톱 DkLfQ 대신 GlQOZ 프레임을 기준으로 검증한다.",
+    "마켓 연동 화면은 쿠팡 저장 폼, 연동 상태, 동기화 작업 대기 상태를 같은 화면에서 보여준다."
   ],
   "frames": [
     { "route": "/", "referenceId": "n9rOC", "width": 1440, "height": 960, "surface": "디자인 브리프" },
